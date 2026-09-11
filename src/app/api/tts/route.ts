@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { text } = await request.json();
+    const { text, voice = 'cassidy' } = await request.json();
 
     if (!text) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
@@ -13,8 +13,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'ElevenLabs API key is missing' }, { status: 500 });
     }
 
-    // Default warm/friendly female voice: Bella (EXAVITQu4vr4xnSDxMaL) or Rachel (21m00Tcm4TlvDq8ikWAM)
-    const voiceId = 'EXAVITQu4vr4xnSDxMaL'; // Bella
+    // Determine the Voice ID based on the selection
+    let voiceId = process.env.ELEVENLABS_VOICE_ID_CASSIDY || 'CASSIDY_VOICE_ID_HERE';
+    if (voice === 'eve') {
+      voiceId = process.env.ELEVENLABS_VOICE_ID_EVE || 'EVE_VOICE_ID_HERE';
+    }
 
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
       method: 'POST',

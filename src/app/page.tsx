@@ -26,6 +26,7 @@ const MOCK_INTERVIEW_SEQUENCE = [
 
 export default function Home() {
   const [mood, setMood] = useState<'default' | 'happy' | 'angry' | 'tired' | 'confused' | 'empathetic'>('default');
+  const [selectedVoice, setSelectedVoice] = useState<'cassidy' | 'eve'>('cassidy');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakVolume, setSpeakVolume] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
@@ -105,7 +106,7 @@ export default function Home() {
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: step.elevenlabs_spoken_text })
+        body: JSON.stringify({ text: step.elevenlabs_spoken_text, voice: selectedVoice })
       });
       
       if (!response.ok) {
@@ -131,7 +132,17 @@ export default function Home() {
       <JazoFace mood={mood} isSpeaking={isSpeaking} speakVolume={speakVolume} />
       
       <div style={{ marginTop: '40px', padding: '20px', background: '#f5f5f5', borderRadius: '12px', maxWidth: '600px', width: '100%', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
-        <h3 style={{ margin: '0 0 10px 0', fontSize: '18px', color: '#333', fontFamily: 'sans-serif' }}>Interview Controls (Mock)</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', color: '#333', fontFamily: 'sans-serif' }}>Interview Controls (Mock)</h3>
+          <select 
+            value={selectedVoice} 
+            onChange={(e) => setSelectedVoice(e.target.value as any)}
+            style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #ccc' }}
+          >
+            <option value="cassidy">Cassidy Voice</option>
+            <option value="eve">Eve Voice</option>
+          </select>
+        </div>
         
         {stepIndex < MOCK_INTERVIEW_SEQUENCE.length ? (
           <div>
