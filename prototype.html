@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboEyes Web Prototype</title>
+<style>
+  body {
+    background-color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  .face-container {
+    position: relative;
+    width: 750px;
+    height: 525px;
+    background: #0a0a0a;
+    border-radius: 60px;
+    box-shadow: 0 0 90px rgba(0, 255, 255, 0.1), inset 0 0 30px #000;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .eyes-wrapper {
+    display: flex;
+    gap: 120px;
+    position: relative;
+    /* Transition for looking around */
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .eye {
+    width: 210px;
+    height: 330px;
+    background-color: #00e5ff;
+    border-radius: 105px;
+    position: relative;
+    /* Transition for mood (clip-path) and blinking (scaleY) */
+    transition: clip-path 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+                transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+                height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* 8-point polygon for smooth interpolation */
+    clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+  }
+
+  /* --- MOODS --- */
+
+  /* Angry */
+  .face-container.angry .eye.left {
+    clip-path: polygon(30% 30%, 65% 15%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+  }
+  .face-container.angry .eye.right {
+    clip-path: polygon(0% 0%, 35% 15%, 70% 30%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+  }
+
+  /* Happy */
+  .face-container.happy .eye.left {
+    clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 70%, 50% 55%, 0% 85%, 0% 50%);
+  }
+  .face-container.happy .eye.right {
+    clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 85%, 50% 55%, 0% 70%, 0% 50%);
+  }
+
+  /* Tired */
+  .face-container.tired .eye {
+    clip-path: polygon(0% 45%, 50% 40%, 100% 45%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+  }
+
+  /* Confused (One big, one small) */
+  .face-container.confused .eye.left {
+    transform: scale(0.8);
+  }
+  .face-container.confused .eye.right {
+    transform: scale(1.1);
+  }
+
+  /* --- BLINKING --- */
+  .eye.blink {
+    transform: scaleY(0.1) !important;
+  }
+
+  /* Control Panel for manual testing */
+  .controls {
+    position: absolute;
+    bottom: 20px;
+    display: flex;
+    gap: 10px;
+    background: rgba(255,255,255,0.1);
+    padding: 10px;
+    border-radius: 10px;
+    z-index: 10;
+  }
+  button {
+    background: #222;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button:hover {
+    background: #00e5ff;
+    color: #000;
+  }
+  button.active {
+    background: #00e5ff;
+    color: #000;
+  }
+</style>
+</head>
+<body>
+
+<div class="face-container" id="face">
+  <div class="eyes-wrapper" id="eyes">
+    <div class="eye left" id="eye-left"></div>
+    <div class="eye right" id="eye-right"></div>
+  </div>
+</div>
+
+<div class="controls">
+  <button onclick="setMode('auto')" class="active" id="btn-auto">Auto Sequence</button>
+  <button onclick="setMode('manual'); setMood('default')">Default</button>
+  <button onclick="setMode('manual'); setMood('happy')">Happy</button>
+  <button onclick="setMode('manual'); setMood('angry')">Angry</button>
+  <button onclick="setMode('manual'); setMood('tired')">Tired</button>
+  <button onclick="setMode('manual'); setMood('confused')">Confused</button>
+</div>
+
+<script>
+  const face = document.getElementById('face');
+  const eyes = document.getElementById('eyes');
+  const eyeLeft = document.getElementById('eye-left');
+  const eyeRight = document.getElementById('eye-right');
+  
+  let mode = 'auto'; // 'auto' or 'manual'
+  let blinkTimer = null;
+  let sequenceTimer = null;
+
+  function setMode(newMode) {
+    mode = newMode;
+    document.getElementById('btn-auto').classList.toggle('active', mode === 'auto');
+    if (mode === 'manual') {
+      clearTimeout(sequenceTimer);
+      lookAt(0, 0); // Reset gaze
+    } else {
+      runAutoSequence();
+    }
+  }
+
+  function setMood(mood) {
+    face.className = 'face-container'; // Reset
+    if (mood !== 'default') {
+      face.classList.add(mood);
+    }
+  }
+
+  function lookAt(x, y) {
+    eyes.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  function blink() {
+    eyeLeft.classList.add('blink');
+    eyeRight.classList.add('blink');
+    setTimeout(() => {
+      eyeLeft.classList.remove('blink');
+      eyeRight.classList.remove('blink');
+    }, 150); // Blink duration
+  }
+
+  // Random auto blinker
+  function startAutoBlink() {
+    const nextBlink = Math.random() * 3000 + 2000; // 2 to 5 seconds
+    blinkTimer = setTimeout(() => {
+      blink();
+      startAutoBlink();
+    }, nextBlink);
+  }
+  startAutoBlink();
+
+  // The Animation Sequence script
+  async function runAutoSequence() {
+    if (mode !== 'auto') return;
+
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    while (mode === 'auto') {
+      // Default looking around
+      setMood('default');
+      lookAt(0, 0);
+      await wait(1000);
+      
+      lookAt(-60, 0); // look left
+      await wait(1000);
+      
+      lookAt(60, -30); // look right and slightly up
+      await wait(1500);
+      
+      lookAt(0, 0);
+      await wait(500);
+
+      // Happy state
+      setMood('happy');
+      lookAt(0, -15);
+      await wait(2000);
+      
+      lookAt(-30, -15);
+      await wait(1000);
+
+      // Transition to Angry
+      setMood('angry');
+      lookAt(0, 15);
+      await wait(2000);
+      lookAt(30, 30); // Glare down right
+      await wait(1500);
+
+      // Tired / Idle
+      lookAt(0, 0);
+      setMood('tired');
+      await wait(2500);
+
+      // Confused
+      setMood('confused');
+      lookAt(-15, -8);
+      await wait(1000);
+      lookAt(15, 8);
+      await wait(1000);
+      lookAt(0,0);
+      await wait(500);
+    }
+  }
+
+  // Start sequence
+  runAutoSequence();
+
+</script>
+</body>
+</html>
