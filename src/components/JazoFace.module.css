@@ -1,0 +1,80 @@
+.faceContainer {
+  position: relative;
+  width: 750px;
+  height: 525px;
+  background: #0a0a0a;
+  border-radius: 60px;
+  box-shadow: 0 0 90px rgba(0, 255, 255, 0.1), inset 0 0 30px #000;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.eyesWrapper {
+  display: flex;
+  gap: 120px;
+  position: relative;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.eye {
+  width: 210px;
+  height: 330px;
+  background-color: #00e5ff;
+  border-radius: 105px;
+  position: relative;
+  transition: clip-path 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* 8-point polygon for smooth interpolation */
+  clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+}
+
+/* --- MOODS --- */
+
+/* Angry */
+.faceContainer.angry .eye.left {
+  clip-path: polygon(30% 30%, 65% 15%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+}
+.faceContainer.angry .eye.right {
+  clip-path: polygon(0% 0%, 35% 15%, 70% 30%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+}
+
+/* Happy */
+.faceContainer.happy .eye.left {
+  clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 70%, 50% 55%, 0% 85%, 0% 50%);
+}
+.faceContainer.happy .eye.right {
+  clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 85%, 50% 55%, 0% 70%, 0% 50%);
+}
+
+/* Empathetic (similar to tired/soft eyes) */
+.faceContainer.empathetic .eye {
+  clip-path: polygon(0% 25%, 50% 20%, 100% 25%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+}
+
+/* Tired */
+.faceContainer.tired .eye {
+  clip-path: polygon(0% 45%, 50% 40%, 100% 45%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+}
+
+/* Confused (One big, one small) */
+.faceContainer.confused .eye.left {
+  transform: scale(0.8);
+}
+.faceContainer.confused .eye.right {
+  transform: scale(1.1);
+}
+
+/* --- BLINKING --- */
+.eye.blink {
+  transform: scaleY(0.1) !important;
+}
+
+/* --- SPEAKING (Volume-driven scale) --- */
+.eye.speaking {
+  /* we will use an inline style variable --speak-scale set by JS */
+  transform: scaleY(var(--speak-scale, 1)) !important;
+}
