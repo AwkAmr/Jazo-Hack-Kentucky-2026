@@ -1,41 +1,38 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import JazoFace from '@/components/JazoFace';
 
-const MOCK_INTERVIEW_SEQUENCE = [
-  {
-    internal_thought: "Greeting the user and establishing a warm baseline.",
-    jazo_facial_expression: "happy",
-    elevenlabs_spoken_text: "Hi there! I'm Jazo. Thanks for taking the time to chat. I heard you've had quite the journey at the university so far. How are you doing today?",
-    interview_progress: "intro"
-  },
-  {
-    internal_thought: "The user mentioned they almost dropped out. This is the emotional core of the story. I need to abandon my planned questions and pivot to this.",
-    jazo_facial_expression: "empathetic",
-    elevenlabs_spoken_text: "Wait, you almost dropped out? That must have been terrifying. What made you stay?",
-    interview_progress: "uncovered_conflict"
-  },
-  {
-    internal_thought: "They stayed because of a mentor. That's a great positive note.",
-    jazo_facial_expression: "happy",
-    elevenlabs_spoken_text: "It sounds like finding the right mentor really changed everything for you. That's a powerful story.",
-    interview_progress: "resolution"
-  }
-];
+type Message = { role: 'user' | 'model'; parts: { text: string }[] };
+type JazoResponse = {
+  internal_thought: string;
+  jazo_facial_expression: 'default' | 'happy' | 'angry' | 'tired' | 'confused' | 'empathetic';
+  elevenlabs_spoken_text: string;
+  interview_progress: string;
+  audioBase64?: string;
+};
 
 export default function Home() {
   const [mood, setMood] = useState<'default' | 'happy' | 'angry' | 'tired' | 'confused' | 'empathetic'>('default');
   const [selectedVoice, setSelectedVoice] = useState<'cassidy' | 'eve'>('cassidy');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakVolume, setSpeakVolume] = useState(0);
-  const [stepIndex, setStepIndex] = useState(0);
-  const [loadingAudio, setLoadingAudio] = useState(false);
+  
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastJazoResponse, setLastJazoResponse] = useState<JazoResponse | null>(null);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, lastJazoResponse]);
 
   const processAudioStream = (arrayBuffer: ArrayBuffer) => {
     if (!audioContextRef.current) {
@@ -79,61 +76,90 @@ export default function Home() {
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
     
-    // Calculate average volume
     let sum = 0;
     for (let i = 0; i < dataArray.length; i++) {
       sum += dataArray[i];
     }
     const average = sum / dataArray.length;
-    // Normalize to 0.0 - 1.0 (max is roughly 255 but average usually peaks around 100-150 for speech)
     const normalized = Math.min(average / 100, 1.0);
     setSpeakVolume(normalized);
     
     animationFrameRef.current = requestAnimationFrame(monitorVolume);
   };
 
-  const handleNextStep = async () => {
-    if (stepIndex >= MOCK_INTERVIEW_SEQUENCE.length) return;
+  const startInterview = async () => {
+    setIsLoading(true);
+    // Send an initial hidden prompt to kick off the conversation based on the brief
+    const initialMessages: Message[] = [{ role: 'user', parts: [{ text: "Hello Jazo! Let's start the interview." }] }];
+    await fetchTurn(initialMessages);
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim() || isLoading) return;
+
+    const userMsg: Message = { role: 'user', parts: [{ text: inputValue }] };
+    const updatedMessages = [...messages, userMsg];
     
-    const step = MOCK_INTERVIEW_SEQUENCE[stepIndex];
-    
-    // Set mood instantly
-    setMood(step.jazo_facial_expression as any);
-    setLoadingAudio(true);
-    
+    setMessages(updatedMessages);
+    setInputValue('');
+    setIsLoading(true);
+
+    await fetchTurn(updatedMessages);
+  };
+
+  const fetchTurn = async (currentMessages: Message[]) => {
     try {
-      // Call ElevenLabs endpoint
-      const response = await fetch('/api/tts', {
+      // 1. Get Gemini Response
+      const chatRes = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: step.elevenlabs_spoken_text, voice: selectedVoice })
+        body: JSON.stringify({ messages: currentMessages })
       });
       
-      if (!response.ok) {
-        console.error("Failed to fetch audio");
-        setLoadingAudio(false);
-        return;
+      if (!chatRes.ok) throw new Error('Failed to get chat response');
+      
+      const jazoData: JazoResponse = await chatRes.json();
+      setLastJazoResponse(jazoData);
+      setMood(jazoData.jazo_facial_expression);
+
+      // Append model response to history
+      setMessages(prev => [...prev, { role: 'model', parts: [{ text: jazoData.elevenlabs_spoken_text }] }]);
+
+      // 2. Play ElevenLabs TTS from Base64
+      if (jazoData.audioBase64) {
+        // Convert base64 to ArrayBuffer
+        const binaryString = window.atob(jazoData.audioBase64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        processAudioStream(bytes.buffer);
       }
-      
-      const arrayBuffer = await response.arrayBuffer();
-      setLoadingAudio(false);
-      processAudioStream(arrayBuffer);
-      
-      setStepIndex(prev => prev + 1);
-    } catch (err) {
-      console.error(err);
-      setLoadingAudio(false);
+
+    } catch (error) {
+      console.error(error);
+      alert('Error during interview step. Check console.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <main style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+    <main style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#fff', paddingTop: '40px', boxSizing: 'border-box' }}>
       
-      <JazoFace mood={mood} isSpeaking={isSpeaking} speakVolume={speakVolume} />
+      {/* Visual Component */}
+      <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center', marginBottom: '-80px' }}>
+        <JazoFace mood={mood} isSpeaking={isSpeaking} speakVolume={speakVolume} />
+      </div>
       
-      <div style={{ marginTop: '40px', padding: '20px', background: '#f5f5f5', borderRadius: '12px', maxWidth: '600px', width: '100%', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', color: '#333', fontFamily: 'sans-serif' }}>Interview Controls (Mock)</h3>
+      {/* Chat Interface */}
+      <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', background: '#f5f5f5', borderRadius: '12px', maxWidth: '800px', width: '100%', height: 'calc(100vh - 450px)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
+        
+        {/* Header Options */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '10px', borderBottom: '1px solid #ddd' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', color: '#333', fontFamily: 'sans-serif' }}>Live Interview Loop</h3>
           <select 
             value={selectedVoice} 
             onChange={(e) => setSelectedVoice(e.target.value as any)}
@@ -144,38 +170,59 @@ export default function Home() {
           </select>
         </div>
         
-        {stepIndex < MOCK_INTERVIEW_SEQUENCE.length ? (
-          <div>
-            <p style={{ margin: '0 0 15px 0', color: '#666', fontSize: '14px', fontFamily: 'sans-serif' }}>
-              <strong>Internal Thought:</strong> {MOCK_INTERVIEW_SEQUENCE[stepIndex].internal_thought}
-            </p>
-            <p style={{ margin: '0 0 15px 0', color: '#666', fontSize: '14px', fontFamily: 'sans-serif' }}>
-              <strong>Jazo will say:</strong> "{MOCK_INTERVIEW_SEQUENCE[stepIndex].elevenlabs_spoken_text}"
-            </p>
-            <button 
-              onClick={handleNextStep}
-              disabled={loadingAudio || isSpeaking}
-              style={{
-                background: loadingAudio || isSpeaking ? '#ccc' : '#00e5ff',
-                color: '#000',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '8px',
-                cursor: loadingAudio || isSpeaking ? 'not-allowed' : 'pointer',
-                fontWeight: 'bold',
-                fontSize: '16px',
-                transition: 'background 0.2s',
-                width: '100%'
-              }}
-            >
-              {loadingAudio ? 'Generating Voice...' : isSpeaking ? 'Jazo is speaking...' : `Trigger Step ${stepIndex + 1}`}
-            </button>
+        {/* Jazo's Internal Brain Viewer */}
+        {lastJazoResponse && (
+          <div style={{ background: '#e0f7fa', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', fontFamily: 'monospace', color: '#006064' }}>
+            <strong>[Jazo's Brain]</strong><br/>
+            Progress: {lastJazoResponse.interview_progress}<br/>
+            Emotion: {lastJazoResponse.jazo_facial_expression}<br/>
+            Thought: <em>{lastJazoResponse.internal_thought}</em>
           </div>
-        ) : (
-          <p style={{ margin: 0, color: '#27ae60', fontWeight: 'bold', fontFamily: 'sans-serif' }}>Mock sequence complete!</p>
         )}
+
+        {/* Chat History */}
+        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {messages.length === 0 ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <button 
+                onClick={startInterview}
+                disabled={isLoading}
+                style={{ background: '#00e5ff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}
+              >
+                {isLoading ? 'Waking Jazo up...' : 'Start Interview'}
+              </button>
+            </div>
+          ) : (
+            messages.map((msg, i) => (
+              <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', background: msg.role === 'user' ? '#007bff' : '#fff', color: msg.role === 'user' ? '#fff' : '#333', padding: '10px 15px', borderRadius: '15px', border: msg.role === 'user' ? 'none' : '1px solid #ccc', fontFamily: 'sans-serif', fontSize: '15px', lineHeight: '1.4' }}>
+                {msg.role === 'model' && <strong style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Jazo:</strong>}
+                {msg.parts[0].text}
+              </div>
+            ))
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input Form */}
+        <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            disabled={isLoading || messages.length === 0}
+            placeholder={isLoading ? "Jazo is thinking..." : "Type your answer..."}
+            style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '15px' }}
+          />
+          <button 
+            type="submit"
+            disabled={isLoading || !inputValue.trim() || messages.length === 0}
+            style={{ background: isLoading || !inputValue.trim() ? '#ccc' : '#00e5ff', color: '#000', border: 'none', padding: '0 20px', borderRadius: '8px', cursor: isLoading || !inputValue.trim() ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
+          >
+            Send
+          </button>
+        </form>
+
       </div>
-      
     </main>
   );
 }
