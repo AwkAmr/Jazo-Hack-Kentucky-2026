@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>JAZO - AI Interviewing</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- NAVBAR -->
+    <header class="topbar">
+
+        <div class="brand">
+            <div class="brandmark">J</div>
+            <span>JAZO</span>
+        </div>
+
+        <nav>
+            <a class="active">New interview</a>
+            <a>Past stories</a>
+        </nav>
+
+        <button class="avatar">OE</button>
+
+    </header>
+
+
+    <!-- ========================= -->
+    <!-- ASSIGNMENT PAGE -->
+    <!-- ========================= -->
+
+    <main id="homePage" class="home">
+
+        <section class="hero">
+
+            <div class="eyebrow">
+                <span class="sparkle">✦</span>
+                AI-POWERED INTERVIEWING
+            </div>
+
+            <h1>
+                Find the story<br>
+                <em>behind the story.</em>
+            </h1>
+
+            <p>
+                Give JAZO an assignment. It plans the interview,
+                asks thoughtful follow-ups, and turns the conversation
+                into content worth publishing.
+            </p>
+
+        </section>
+
+
+        <section class="workspace">
+
+            <!-- FORM -->
+            <div class="form-card">
+
+                <div class="card-top">
+
+                    <div>
+                        <span class="step">01</span>
+                        <h2>Set the assignment</h2>
+                    </div>
+
+                    <div class="card-icon">▣</div>
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Who are you interviewing?
+                    </label>
+
+                    <input
+                        id="interviewee"
+                        type="text"
+                        placeholder="e.g. Sarah, founder of Acme AI"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        What is the topic?
+                    </label>
+
+                    <input
+                        id="topic"
+                        type="text"
+                        placeholder="e.g. Why she started her company"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        What do you want to create?
+                    </label>
+
+                    <input
+                        id="goal"
+                        type="text"
+                        placeholder="e.g. A compelling founder story for LinkedIn"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        What should we discover?
+                        <span>Optional</span>
+                    </label>
+
+                    <textarea
+                        id="discoveries"
+                        placeholder="e.g. motivation, biggest obstacle, turning point, surprising moment"
+                    ></textarea>
+
+                </div>
+
+
+                <button
+                    id="generateBtn"
+                    class="primary"
+                >
+                    Generate interview
+
+                    <span>→</span>
+                </button>
+
+
+                <div class="trust">
+                    ◷ Takes about 30 seconds to prepare
+                </div>
+
+            </div>
+
+
+            <!-- RIGHT PREVIEW -->
+            <div class="preview-card">
+
+                <div class="preview-label">
+                    WHAT HAPPENS NEXT
+                </div>
+
+
+                <div class="timeline">
+
+                    <div class="timeline-item active">
+
+                        <div class="timeline-num">01</div>
+
+                        <div>
+                            <h3>Plan</h3>
+
+                            <p>
+                                JAZO identifies what it needs to learn.
+                            </p>
+                        </div>
+
+                    </div>
+
+
+                    <div class="timeline-item">
+
+                        <div class="timeline-num">02</div>
+
+                        <div>
+                            <h3>Interview</h3>
+
+                            <p>
+                                The agent asks questions and follows interesting leads.
+                            </p>
+                        </div>
+
+                    </div>
+
+
+                    <div class="timeline-item">
+
+                        <div class="timeline-num">03</div>
+
+                        <div>
+                            <h3>Discover</h3>
+
+                            <p>
+                                Key moments, quotes, and story angles are extracted.
+                            </p>
+                        </div>
+
+                    </div>
+
+
+                    <div class="timeline-item">
+
+                        <div class="timeline-num">04</div>
+
+                        <div>
+                            <h3>Create</h3>
+
+                            <p>
+                                Turn the finished story into publishable content.
+                            </p>
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="voice-note">
+
+                    <div class="mic">
+                        🎙
+                    </div>
+
+                    <div>
+
+                        <b>Voice-ready</b>
+
+                        <p>
+                            Switch this interview to ElevenLabs voice
+                            when you're ready.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+
+    <!-- ========================= -->
+    <!-- INTERVIEW PAGE -->
+    <!-- ========================= -->
+
+    <main id="interviewPage" class="interview-layout hidden">
+
+
+        <!-- CHAT -->
+        <section class="chat-panel">
+
+            <div class="eyebrow">
+                <span class="live-dot"></span>
+                LIVE INTERVIEW
+            </div>
+
+
+            <h1>
+                Let's find the<br>
+                <em>real story.</em>
+            </h1>
+
+
+            <div
+                id="chat"
+                class="chat"
+            >
+
+                <div class="bubble ai">
+                    Hi. I'm JAZO. Give me an assignment
+                    and I'll turn it into a focused interview.
+                </div>
+
+            </div>
+
+
+            <div class="composer">
+
+                <textarea
+                    id="messageInput"
+                    placeholder="Type the interviewee's response…"
+                ></textarea>
+
+
+                <button
+                    id="sendBtn"
+                    class="send"
+                >
+                    ↑
+                </button>
+
+            </div>
+
+
+            <p class="hint">
+                Enter to send · Shift + Enter for a new line
+            </p>
+
+        </section>
+
+
+
+        <!-- SIDEBAR -->
+        <aside class="side-panel">
+
+            <div class="side-head">
+
+                <span>
+                    ASSIGNMENT
+                </span>
+
+                <span>
+                    ⚙
+                </span>
+
+            </div>
+
+
+            <div class="assignment-mini">
+
+                <label>
+                    INTERVIEWEE
+                </label>
+
+                <strong id="sideInterviewee">
+                    Your interviewee
+                </strong>
+
+
+                <label>
+                    TOPIC
+                </label>
+
+                <strong id="sideTopic">
+                    Your story topic
+                </strong>
+
+
+                <label>
+                    GOAL
+                </label>
+
+                <p id="sideGoal">
+                    Discover the strongest story.
+                </p>
+
+            </div>
+
+
+            <div class="divider"></div>
+
+
+            <div class="side-head">
+
+                <span>
+                    INTERVIEW PLAN
+                </span>
+
+                <span class="count">
+                    5 areas
+                </span>
+
+            </div>
+
+
+            <div class="topic">
+
+                <span class="num">01</span>
+                Origin & context
+                <span class="check">✓</span>
+
+            </div>
+
+
+            <div class="topic">
+
+                <span class="num">02</span>
+                Motivation
+                <span class="check">✓</span>
+
+            </div>
+
+
+            <div class="topic">
+
+                <span class="num">03</span>
+                Turning point
+                <span class="check">✓</span>
+
+            </div>
+
+
+            <div class="topic">
+
+                <span class="num">04</span>
+                Challenges
+                <span class="check">✓</span>
+
+            </div>
+
+
+            <div class="topic">
+
+                <span class="num">05</span>
+                Unexpected details
+                <span class="check">✓</span>
+
+            </div>
+
+
+            <div class="progress">
+
+                <div
+                    id="progressBar"
+                    style="width: 18%"
+                ></div>
+
+            </div>
+
+
+            <div class="progress-meta">
+
+                <span>
+                    Discovery progress
+                </span>
+
+                <b id="progressText">
+                    18%
+                </b>
+
+            </div>
+
+        </aside>
+
+    </main>
+
+</div>
+
+
+<script src="script.js"></script>
+
+</body>
+</html>
