@@ -43,6 +43,25 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+  // --- Sync face state to the physical MatrixPortal S3 LED matrix ---
+  const faceStateRef = useRef({ mood, isSpeaking, speakVolume });
+  useEffect(() => {
+    faceStateRef.current = { mood, isSpeaking, speakVolume };
+  }, [mood, isSpeaking, speakVolume]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch('/api/face-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(faceStateRef.current),
+      }).catch(() => {}); // ignore errors if the matrix bridge isn't running
+    }, 150);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const audioChunksRef = useRef<Blob[]>([]);
 
   // Keys this interview in the JAZO MCP server. Generated lazily on the client
