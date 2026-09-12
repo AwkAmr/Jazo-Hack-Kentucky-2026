@@ -49,6 +49,14 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, lastJazoResponse]);
 
+  // Trigger generation when Jazo is finished speaking a completed interview
+  useEffect(() => {
+    if (!isSpeaking && lastJazoResponse && (lastJazoResponse.interview_progress === 'complete' || lastJazoResponse.interview_progress === 'completed') && !finalStory && !isGeneratingStory) {
+      const fullAssignment = `Who is being interviewed: ${who}\nTopic: ${topic}\nContent Needed: ${contentType}`;
+      generateFinalStory(messages, fullAssignment);
+    }
+  }, [isSpeaking, lastJazoResponse, messages, finalStory, isGeneratingStory, who, topic, contentType]);
+
   // Push-to-talk Spacebar logic
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -243,6 +251,11 @@ export default function Home() {
     }
   };
 
+  const handleWrapUp = async () => {
+    setIsWrappingUp(true);
+    await fetchTurn(messages, true);
+  };
+
   const startInterview = async () => {
     setIsLoading(true);
     // Send an initial hidden prompt to kick off the conversation based on the brief
@@ -250,7 +263,7 @@ export default function Home() {
     await fetchTurn(initialMessages);
   };
 
-  const fetchTurn = async (currentMessages: Message[]) => {
+  const fetchTurn = async (currentMessages: Message[], overrideWrapUp: boolean = false) => {
     setIsLoading(true);
     try {
       const fullAssignment = `Who is being interviewed: ${who}\nTopic: ${topic}\nContent Needed: ${contentType}`;
@@ -261,7 +274,7 @@ export default function Home() {
         body: JSON.stringify({ 
           messages: currentMessages, 
           assignment: fullAssignment,
-          wrapUp: isWrappingUp 
+          wrapUp: isWrappingUp || overrideWrapUp
         })
       });
       
@@ -283,9 +296,7 @@ export default function Home() {
       }
 
       // 3. Trigger Generation if Complete
-      if (jazoData.interview_progress === 'complete' || jazoData.interview_progress === 'completed') {
-        generateFinalStory(currentMessages, fullAssignment);
-      }
+      // Moved to useEffect to wait for Jazo to finish speaking
 
     } catch (error: any) {
       console.error(error);
@@ -389,7 +400,7 @@ export default function Home() {
             {/* Wrap Up Button */}
             {!isWrappingUp && !finalStory && !isGeneratingStory && (
               <button 
-                onClick={() => setIsWrappingUp(true)}
+                onClick={handleWrapUp}
                 style={{ position: 'absolute', top: '20px', right: '20px', background: '#ff3b30', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)' }}
               >
                 Wrap Up Interview

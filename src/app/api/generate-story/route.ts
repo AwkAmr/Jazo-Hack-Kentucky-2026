@@ -29,11 +29,19 @@ Your job is to take a raw interview transcript and transform it into a polished,
 Here is the Assignment Brief:
 ${assignment}
 
+Stylistic Constraints (CRITICAL):
+- Do NOT use emojis.
+- Do NOT use markdown symbols such as # for headers.
+- Do NOT use em dashes.
+- Make the tone professional, fun, and cheerful, perfect for an engaging social media post.
+- Do NOT structure it like a tedious, cliché LinkedIn post. Keep it snappy and engaging.
+- Pull quotes MUST be extracted ONLY from the participant (the User), never from the interviewer (Jazo).
+
 You MUST output your response as a valid JSON object matching this exact structure:
 {
-  "story": "The fully drafted marketing asset matching the requested content type, written beautifully and ready to publish. Use markdown formatting for headers and paragraphs.",
+  "story": "The fully drafted social media post matching the requested content type, written beautifully and ready to publish.",
   "pull_quotes": [
-    "The 3-5 most compelling, raw, word-for-word quotes from the User in the transcript. These should be punchy and perfect for social media.",
+    "The 3-5 most compelling, raw, word-for-word quotes from the User in the transcript. Never quote Jazo.",
     "Another great quote..."
   ]
 }
