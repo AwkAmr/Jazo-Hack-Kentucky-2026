@@ -18,20 +18,123 @@ export default function Home() {
   const [speakVolume, setSpeakVolume] = useState(0);
   
   const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [lastJazoResponse, setLastJazoResponse] = useState<JazoResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<'visual' | 'transcript'>('visual');
+  const [isRecording, setIsRecording] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, lastJazoResponse]);
+
+  // Push-to-talk Spacebar logic
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent default scrolling when hitting spacebar
+      if (e.code === 'Space' && e.target === document.body) {
+        e.preventDefault();
+      }
+      
+      // Only start recording if we have started the interview and are not loading/already recording
+      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isRecording) {
+        startRecording();
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        stopRecording();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isLoading, isRecording, messages.length]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        // Stop all tracks to release mic
+        stream.getTracks().forEach(track => track.stop());
+        await processAudioUpload(audioBlob);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Mic error", err);
+      alert("Microphone access denied or not available.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const processAudioUpload = async (blob: Blob) => {
+    setIsLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', blob);
+
+      const sttRes = await fetch('/api/stt', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!sttRes.ok) {
+        const err = await sttRes.json();
+        throw new Error(err.error || 'Speech-to-Text failed');
+      }
+
+      const sttData = await sttRes.json();
+      const transcribedText = sttData.text;
+
+      if (!transcribedText || transcribedText.trim() === '') {
+        throw new Error('No speech detected. Please hold spacebar and try again.');
+      }
+
+      // Append transcribed user message
+      const userMsg: Message = { role: 'user', parts: [{ text: transcribedText }] };
+      const updatedMessages = [...messages, userMsg];
+      setMessages(updatedMessages);
+
+      // Trigger the standard chat flow
+      await fetchTurn(updatedMessages);
+
+    } catch (err: any) {
+      console.error(err);
+      alert('Error: ' + err.message);
+      setIsLoading(false);
+    }
+  };
 
   const processAudioStream = (arrayBuffer: ArrayBuffer) => {
     if (!audioContextRef.current) {
@@ -93,20 +196,6 @@ export default function Home() {
     await fetchTurn(initialMessages);
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
-
-    const userMsg: Message = { role: 'user', parts: [{ text: inputValue }] };
-    const updatedMessages = [...messages, userMsg];
-    
-    setMessages(updatedMessages);
-    setInputValue('');
-    setIsLoading(true);
-
-    await fetchTurn(updatedMessages);
-  };
-
   const fetchTurn = async (currentMessages: Message[]) => {
     try {
       // 1. Get Gemini Response
@@ -130,7 +219,6 @@ export default function Home() {
 
       // 2. Play ElevenLabs TTS from Base64
       if (jazoData.audioBase64) {
-        // Convert base64 to ArrayBuffer
         const binaryString = window.atob(jazoData.audioBase64);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -149,74 +237,89 @@ export default function Home() {
   };
 
   return (
-    <main style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#fff', paddingTop: '40px', boxSizing: 'border-box' }}>
+    <main style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', boxSizing: 'border-box' }}>
       
-      {/* Visual Component */}
-      <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center', marginBottom: '-80px' }}>
-        <JazoFace mood={mood} isSpeaking={isSpeaking} speakVolume={speakVolume} />
+      {/* Navigation Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #eee', padding: '10px 20px', gap: '15px' }}>
+        <button 
+          onClick={() => setActiveTab('visual')}
+          style={{ padding: '8px 16px', background: activeTab === 'visual' ? '#00e5ff' : 'transparent', color: activeTab === 'visual' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          Visual
+        </button>
+        <button 
+          onClick={() => setActiveTab('transcript')}
+          style={{ padding: '8px 16px', background: activeTab === 'transcript' ? '#00e5ff' : 'transparent', color: activeTab === 'transcript' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          Transcript
+        </button>
       </div>
-      
-      {/* Chat Interface */}
-      <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', background: '#f5f5f5', borderRadius: '12px', maxWidth: '800px', width: '100%', height: 'calc(100vh - 450px)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
-        
-        {/* Header Options */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '10px', borderBottom: '1px solid #ddd' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', color: '#333', fontFamily: 'sans-serif' }}>Live Interview Loop</h3>
-          <span style={{ fontSize: '14px', color: '#666' }}>Voice: EVE (Default)</span>
-        </div>
-        
-        {/* Jazo's Internal Brain Viewer */}
-        {lastJazoResponse && (
-          <div style={{ background: '#e0f7fa', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', fontFamily: 'monospace', color: '#006064' }}>
-            <strong>[Jazo's Brain]</strong><br/>
-            Progress: {lastJazoResponse.interview_progress}<br/>
-            Emotion: {lastJazoResponse.jazo_facial_expression}<br/>
-            Thought: <em>{lastJazoResponse.internal_thought}</em>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {messages.length === 0 ? (
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <button 
+              onClick={startInterview}
+              disabled={isLoading}
+              style={{ background: '#00e5ff', border: 'none', padding: '16px 32px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '20px', boxShadow: '0 4px 15px rgba(0, 229, 255, 0.4)' }}
+            >
+              {isLoading ? 'Waking Jazo up...' : 'Start Interview'}
+            </button>
+          </div>
+        ) : activeTab === 'visual' ? (
+          // VISUAL TAB
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+            
+            <div style={{ transform: 'scale(1.2)', transformOrigin: 'center' }}>
+              <JazoFace mood={mood} isSpeaking={isSpeaking} speakVolume={speakVolume} />
+            </div>
+
+            {/* Brain Status Overlay */}
+            {lastJazoResponse && (
+              <div style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(224, 247, 250, 0.9)', padding: '15px', borderRadius: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#006064', maxWidth: '300px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                <strong>[Jazo's Brain]</strong><br/><br/>
+                Progress: {lastJazoResponse.interview_progress}<br/><br/>
+                Emotion: {lastJazoResponse.jazo_facial_expression}<br/><br/>
+                Thought: <em>{lastJazoResponse.internal_thought}</em>
+              </div>
+            )}
+
+            {/* Mic Indicator Overlay */}
+            <div style={{ position: 'absolute', bottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <div style={{ 
+                width: '60px', height: '60px', borderRadius: '50%', 
+                background: isRecording ? '#ff3b30' : (isLoading ? '#ccc' : '#f0f0f0'),
+                display: 'flex', justifyContent: 'center', alignItems: 'center',
+                boxShadow: isRecording ? '0 0 20px rgba(255, 59, 48, 0.5)' : '0 2px 10px rgba(0,0,0,0.1)',
+                transition: 'all 0.2s ease'
+              }}>
+                <span style={{ fontSize: '24px' }}>🎙️</span>
+              </div>
+              <span style={{ color: '#666', fontWeight: 'bold', fontFamily: 'sans-serif' }}>
+                {isLoading ? 'Processing...' : (isRecording ? 'Listening...' : 'Hold SPACE to speak')}
+              </span>
+            </div>
+
+          </div>
+        ) : (
+          // TRANSCRIPT TAB
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '40px', background: '#f9f9f9', overflowY: 'auto' }}>
+            <div style={{ maxWidth: '800px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {messages.map((msg, i) => {
+                // Skip the hidden system prompt
+                if (i === 0 && msg.role === 'user') return null;
+                
+                return (
+                  <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', background: msg.role === 'user' ? '#007bff' : '#fff', color: msg.role === 'user' ? '#fff' : '#333', padding: '15px 20px', borderRadius: '15px', border: msg.role === 'user' ? 'none' : '1px solid #ccc', fontFamily: 'sans-serif', fontSize: '16px', lineHeight: '1.5', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+                    {msg.role === 'model' && <strong style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Jazo:</strong>}
+                    {msg.parts[0].text}
+                  </div>
+                );
+              })}
+              <div ref={chatEndRef} />
+            </div>
           </div>
         )}
-
-        {/* Chat History */}
-        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {messages.length === 0 ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <button 
-                onClick={startInterview}
-                disabled={isLoading}
-                style={{ background: '#00e5ff', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}
-              >
-                {isLoading ? 'Waking Jazo up...' : 'Start Interview'}
-              </button>
-            </div>
-          ) : (
-            messages.map((msg, i) => (
-              <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', background: msg.role === 'user' ? '#007bff' : '#fff', color: msg.role === 'user' ? '#fff' : '#333', padding: '10px 15px', borderRadius: '15px', border: msg.role === 'user' ? 'none' : '1px solid #ccc', fontFamily: 'sans-serif', fontSize: '15px', lineHeight: '1.4' }}>
-                {msg.role === 'model' && <strong style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Jazo:</strong>}
-                {msg.parts[0].text}
-              </div>
-            ))
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Input Form */}
-        <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            disabled={isLoading || messages.length === 0}
-            placeholder={isLoading ? "Jazo is thinking..." : "Type your answer..."}
-            style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '15px' }}
-          />
-          <button 
-            type="submit"
-            disabled={isLoading || !inputValue.trim() || messages.length === 0}
-            style={{ background: isLoading || !inputValue.trim() ? '#ccc' : '#00e5ff', color: '#000', border: 'none', padding: '0 20px', borderRadius: '8px', cursor: isLoading || !inputValue.trim() ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
-          >
-            Send
-          </button>
-        </form>
-
       </div>
     </main>
   );
