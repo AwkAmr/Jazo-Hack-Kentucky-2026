@@ -87,7 +87,7 @@ You MUST output your response as a valid JSON object matching this exact structu
 
     const finalPrompt = `Here is the interview transcript so far:\n\n${transcript}\n\nGenerate your next JSON response to continue the interview!`;
 
-    const fallbackModels = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+    const fallbackModels = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash'];
     let outputText = null;
     let lastError = null;
 
