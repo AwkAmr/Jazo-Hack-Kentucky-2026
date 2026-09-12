@@ -29,7 +29,7 @@
 // ---------------------------------------------------------------------------
 const char* WIFI_SSID     = "Genuine Work";
 const char* WIFI_PASSWORD = "G3nU1nEW0Rk";
-const char* SERVER_URL    = "http://192.168.50.72:3000/api/face-state";
+const char* SERVER_URL = "http://192.168.50.72:3000/api/face-state";
 
 // ---------------------------------------------------------------------------
 // HUB75 matrix pin configuration for the Adafruit MatrixPortal ESP32-S3
@@ -244,7 +244,7 @@ void drawEyeShape(int cx, int cy, bool isLeftEye) {
   int x = cx - w / 2;
   int y = yTop - lift;
 
-  uint16_t color = matrix.color565(EYE_COLOR_R, EYE_COLOR_G, EYE_COLOR_B);
+uint16_t color = matrix.color565(EYE_COLOR_B, EYE_COLOR_G, EYE_COLOR_R);
 
   matrix.fillRoundRect(x, y, w, h, min(w, h) / 3, color);
 
