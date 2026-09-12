@@ -1,5 +1,15 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
+import fs from 'fs';
+
+// Inject GCP credentials dynamically in Vercel
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+  const tmpPath = '/tmp/gcp-key.json';
+  if (!fs.existsSync(tmpPath)) {
+    fs.writeFileSync(tmpPath, process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+  }
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpPath;
+}
 
 export async function POST(request: Request) {
   try {

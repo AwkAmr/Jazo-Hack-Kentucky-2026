@@ -3,6 +3,16 @@ import { GoogleGenAI } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import * as z from 'zod/v4';
+import fs from 'fs';
+
+// Inject GCP credentials dynamically in Vercel
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+  const tmpPath = '/tmp/gcp-key.json';
+  if (!fs.existsSync(tmpPath)) {
+    fs.writeFileSync(tmpPath, process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+  }
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpPath;
+}
 
 import { connectJazoMcp, resolveMcpUrl, type JazoMcpSession } from '@/lib/jazoMcpClient';
 import {
