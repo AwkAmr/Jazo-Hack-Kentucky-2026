@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const elevenLabsFormData = new FormData();
     elevenLabsFormData.append('file', file, 'audio.webm');
     elevenLabsFormData.append('model_id', 'scribe_v1');
-    
+
     // Call ElevenLabs STT API
     const sttResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
       method: 'POST',
@@ -38,10 +38,10 @@ export async function POST(request: Request) {
     }
 
     const sttData = await sttResponse.json();
-    
+
     // ElevenLabs returns { "text": "transcribed text..." }
     return NextResponse.json({ text: sttData.text });
-    
+
   } catch (error: any) {
     console.error('STT Route Error:', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });

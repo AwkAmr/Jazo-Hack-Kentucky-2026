@@ -21,6 +21,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastJazoResponse, setLastJazoResponse] = useState<JazoResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'visual' | 'transcript'>('visual');
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -46,7 +47,7 @@ export default function Home() {
       }
       
       // Only start recording if we have started the interview and are not loading/already recording
-      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isRecording) {
+      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording) {
         startRecording();
       }
     };
@@ -63,12 +64,21 @@ export default function Home() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isLoading, isRecording, messages.length]);
+  }, [isLoading, isTranscribing, isRecording, messages.length]);
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Request low-spec audio for faster upload/processing
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { sampleRate: 16000, channelCount: 1 } 
+      });
+      
+      let options = {};
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        options = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 16000 };
+      }
+      
+      const recorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
@@ -99,7 +109,7 @@ export default function Home() {
   };
 
   const processAudioUpload = async (blob: Blob) => {
-    setIsLoading(true);
+    setIsTranscribing(true);
     try {
       const formData = new FormData();
       formData.append('file', blob);
@@ -125,6 +135,7 @@ export default function Home() {
       const userMsg: Message = { role: 'user', parts: [{ text: transcribedText }] };
       const updatedMessages = [...messages, userMsg];
       setMessages(updatedMessages);
+      setIsTranscribing(false);
 
       // Trigger the standard chat flow
       await fetchTurn(updatedMessages);
@@ -132,7 +143,7 @@ export default function Home() {
     } catch (err: any) {
       console.error(err);
       alert('Error: ' + err.message);
-      setIsLoading(false);
+      setIsTranscribing(false);
     }
   };
 
@@ -197,6 +208,7 @@ export default function Home() {
   };
 
   const fetchTurn = async (currentMessages: Message[]) => {
+    setIsLoading(true);
     try {
       // 1. Get Gemini Response
       const chatRes = await fetch('/api/chat', {
@@ -288,7 +300,7 @@ export default function Home() {
             <div style={{ position: 'absolute', bottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
               <div style={{ 
                 width: '60px', height: '60px', borderRadius: '50%', 
-                background: isRecording ? '#ff3b30' : (isLoading ? '#ccc' : '#f0f0f0'),
+                background: isRecording ? '#ff3b30' : (isLoading || isTranscribing ? '#ccc' : '#f0f0f0'),
                 display: 'flex', justifyContent: 'center', alignItems: 'center',
                 boxShadow: isRecording ? '0 0 20px rgba(255, 59, 48, 0.5)' : '0 2px 10px rgba(0,0,0,0.1)',
                 transition: 'all 0.2s ease'
@@ -296,7 +308,7 @@ export default function Home() {
                 <span style={{ fontSize: '24px' }}>🎙️</span>
               </div>
               <span style={{ color: '#666', fontWeight: 'bold', fontFamily: 'sans-serif' }}>
-                {isLoading ? 'Processing...' : (isRecording ? 'Listening...' : 'Hold SPACE to speak')}
+                {isTranscribing ? 'Transcribing...' : (isLoading ? 'Jazo is thinking...' : (isRecording ? 'Listening...' : 'Hold SPACE to speak'))}
               </span>
             </div>
 

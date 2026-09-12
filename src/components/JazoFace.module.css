@@ -24,10 +24,17 @@
   background-color: #00e5ff;
   border-radius: 105px;
   position: relative;
-  transition: clip-path 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
-              transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-              height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  
+  transition: clip-path 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Composition variables for scaling */
+  --base-scale: 1;
+  --speak-anim: 1;
+  --blink-anim: 1;
+  --speak-translate-y: 0px;
+  transform: translateY(var(--speak-translate-y)) scale(var(--base-scale), calc(var(--base-scale) * var(--speak-anim) * var(--blink-anim)));
+
   /* 8-point polygon for smooth interpolation */
   clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
 }
@@ -38,21 +45,23 @@
 .faceContainer.angry .eye.left {
   clip-path: polygon(30% 30%, 65% 15%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
 }
+
 .faceContainer.angry .eye.right {
   clip-path: polygon(0% 0%, 35% 15%, 70% 30%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
 }
 
 /* Happy */
-.faceContainer.happy .eye.left {
-  clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 70%, 50% 55%, 0% 85%, 0% 50%);
-}
-.faceContainer.happy .eye.right {
-  clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 85%, 50% 55%, 0% 70%, 0% 50%);
+.faceContainer.happy .eye {
+  clip-path: polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 85%, 50% 65%, 0% 85%, 0% 50%);
 }
 
-/* Empathetic (similar to tired/soft eyes) */
-.faceContainer.empathetic .eye {
-  clip-path: polygon(0% 25%, 50% 20%, 100% 25%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+/* Empathetic / Sad (Puppy dog eyes: inner corners high, outer corners droop) */
+.faceContainer.empathetic .eye.left {
+  clip-path: polygon(0% 35%, 50% 15%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
+}
+
+.faceContainer.empathetic .eye.right {
+  clip-path: polygon(0% 0%, 50% 15%, 100% 35%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
 }
 
 /* Tired */
@@ -62,19 +71,20 @@
 
 /* Confused (One big, one small) */
 .faceContainer.confused .eye.left {
-  transform: scale(0.8);
+  --base-scale: 0.8;
 }
+
 .faceContainer.confused .eye.right {
-  transform: scale(1.1);
+  --base-scale: 1.1;
 }
 
 /* --- BLINKING --- */
 .eye.blink {
-  transform: scaleY(0.1) !important;
+  --blink-anim: 0.1 !important;
 }
 
 /* --- SPEAKING (Volume-driven scale) --- */
 .eye.speaking {
   /* we will use an inline style variable --speak-scale set by JS */
-  transform: scaleY(var(--speak-scale, 1)) !important;
+  --speak-anim: var(--speak-scale, 1) !important;
 }

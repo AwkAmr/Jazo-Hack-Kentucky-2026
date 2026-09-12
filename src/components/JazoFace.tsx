@@ -32,6 +32,44 @@ export default function JazoFace({ mood = 'default', isSpeaking = false, speakVo
     };
   }, []);
 
+  // Idle look-around logic
+  useEffect(() => {
+    let gazeTimer: NodeJS.Timeout;
+
+    const triggerLook = () => {
+      // If speaking, prefer making "eye contact" (stay near 0,0)
+      if (isSpeaking) {
+        setGaze({ 
+          x: (Math.random() - 0.5) * 10, // tiny movements
+          y: (Math.random() - 0.5) * 5 
+        });
+        gazeTimer = setTimeout(triggerLook, Math.random() * 2000 + 1000);
+      } else {
+        // Idle looking around (larger movements)
+        // x between -40 and 40, y between -20 and 20
+        const newX = (Math.random() - 0.5) * 80;
+        const newY = (Math.random() - 0.5) * 40;
+        
+        // 30% chance to just look straight ahead
+        if (Math.random() < 0.3) {
+          setGaze({ x: 0, y: 0 });
+        } else {
+          setGaze({ x: newX, y: newY });
+        }
+        
+        // Look again in 2 to 6 seconds
+        gazeTimer = setTimeout(triggerLook, Math.random() * 4000 + 2000);
+      }
+    };
+
+    gazeTimer = setTimeout(triggerLook, 3000);
+
+    return () => {
+      clearTimeout(gazeTimer);
+    };
+  }, [isSpeaking]);
+
+
   // Map the container class based on mood
   const moodClass = mood !== 'default' ? styles[mood] : '';
   const containerClassName = `${styles.faceContainer} ${moodClass}`.trim();
@@ -40,9 +78,10 @@ export default function JazoFace({ mood = 'default', isSpeaking = false, speakVo
   const leftEyeClasses = `${styles.eye} ${styles.left} ${isBlinking ? styles.blink : ''} ${isSpeaking ? styles.speaking : ''}`.trim();
   const rightEyeClasses = `${styles.eye} ${styles.right} ${isBlinking ? styles.blink : ''} ${isSpeaking ? styles.speaking : ''}`.trim();
 
-  // Map volume (0-1) to a CSS scale value (1.0 to ~1.3)
-  // When speaking, we want the eye to pulse vertically slightly based on volume
-  const speakScale = isSpeaking ? 1 + (speakVolume * 0.3) : 1;
+  // Map volume (0-1) to a CSS scale value (lower fluctuation: max 1.1x)
+  const speakScale = isSpeaking ? 1 + (speakVolume * 0.1) : 1;
+  // Map volume to a slight vertical bounce (up to -15px)
+  const speakTranslateY = isSpeaking ? -(speakVolume * 15) : 0;
 
   return (
     <div className={containerClassName}>
@@ -52,11 +91,11 @@ export default function JazoFace({ mood = 'default', isSpeaking = false, speakVo
       >
         <div 
           className={leftEyeClasses} 
-          style={{ '--speak-scale': speakScale } as React.CSSProperties}
+          style={{ '--speak-scale': speakScale, '--speak-translate-y': `${speakTranslateY}px` } as React.CSSProperties}
         />
         <div 
           className={rightEyeClasses} 
-          style={{ '--speak-scale': speakScale } as React.CSSProperties}
+          style={{ '--speak-scale': speakScale, '--speak-translate-y': `${speakTranslateY}px` } as React.CSSProperties}
         />
       </div>
     </div>
