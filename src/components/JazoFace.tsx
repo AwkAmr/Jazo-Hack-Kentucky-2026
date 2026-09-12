@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import styles from './JazoFace.module.css';
 
 interface JazoFaceProps {
-  mood?: 'default' | 'happy' | 'angry' | 'tired' | 'confused' | 'empathetic';
+  mood?: 'default' | 'happy' | 'sad' | 'angry' | 'tired' | 'confused' | 'empathetic';
   isSpeaking?: boolean;
   speakVolume?: number; // 0.0 to 1.0
 }
