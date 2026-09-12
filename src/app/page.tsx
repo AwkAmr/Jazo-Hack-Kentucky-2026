@@ -21,7 +21,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastJazoResponse, setLastJazoResponse] = useState<JazoResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'visual' | 'transcript' | 'assignment'>('visual');
-  const [assignmentText, setAssignmentText] = useState('Interview the user about his experience as a volunteer in the Hack Kentucky 2026 Hackathon.');
+  const [assignmentText, setAssignmentText] = useState('Interview the user and gather compelling material.');
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   
