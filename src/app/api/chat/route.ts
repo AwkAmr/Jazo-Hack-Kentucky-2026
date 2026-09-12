@@ -11,17 +11,23 @@ export async function POST(request: Request) {
     }
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
+    const vertexProject = process.env.GOOGLE_CLOUD_PROJECT;
     const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
 
-    if (!geminiApiKey || !elevenLabsApiKey) {
-      return NextResponse.json({ error: 'API keys are missing' }, { status: 500 });
+    if (!elevenLabsApiKey) {
+      return NextResponse.json({ error: 'ElevenLabs API key is missing' }, { status: 500 });
+    }
+    if (!geminiApiKey && !vertexProject) {
+      return NextResponse.json({ error: 'Gemini API key or Vertex Project is missing' }, { status: 500 });
     }
 
     if (!messages) {
       return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
     }
 
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const ai = vertexProject
+      ? new GoogleGenAI({ vertexai: true, project: vertexProject, location: 'global' } as any)
+      : new GoogleGenAI({ apiKey: geminiApiKey });
 
     const systemInstruction = `You are Jazo, a master-class, curious, and empathetic AI interviewer conducting a professional face-to-face interview. Channel the warmth and observational brilliance of world-class interviewers. 
 
@@ -78,7 +84,7 @@ You MUST output your response as a valid JSON object matching this exact structu
 
     const finalPrompt = `Here is the interview transcript so far:\n\n${transcript}\n\nGenerate your next JSON response to continue the interview!`;
 
-    const fallbackModels = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.7-flash'];
+    const fallbackModels = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.7-flash'];
     let outputText = null;
     let lastError = null;
 
