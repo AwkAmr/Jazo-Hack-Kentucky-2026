@@ -37,7 +37,6 @@ Ask: End your turn with exactly ONE question.
 The Curiosity Trigger: Actively listen for mentions of failures, unexpected hurdles, or strong emotional reactions. If you detect any of these, immediately abandon your planned questionnaire to ask a probing follow-up about that specific detail (e.g., "What was the hardest part of that moment?").
 
 Conversational Constraints (CRITICAL):
-Keep your responses EXTREMELY short (1 to 2 short sentences maximum). You must be brief. Long responses take too long to generate audio for.
 Never ask more than one question at a time. Do not stack questions.
 Speak conversationally. Never use bullet points, numbered lists, or jargon.
 You must keep the conversation flowing naturally.
@@ -71,51 +70,54 @@ You MUST output your response as a valid JSON object matching this exact structu
 
     const finalPrompt = `Here is the interview transcript so far:\n\n${transcript}\n\nGenerate your next JSON response to continue the interview!`;
 
-    const fallbackModels = ['gemini-1.5-flash-8b', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-3.5-flash'];
+    const fallbackModels = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.7-flash'];
     let outputText = null;
     let lastError = null;
 
     console.time('Gemini_Total_Time');
-    for (const modelId of fallbackModels) {
-      try {
-        console.time(`Gemini_Model_${modelId}`);
-        
-        // Enforce a strict 3.5s timeout. If the SDK hangs due to rate-limit backoffs, we instantly fail over.
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Timeout")), 3500)
-        );
+    while (!outputText) {
+      for (const modelId of fallbackModels) {
+        try {
+          console.time(`Gemini_Model_${modelId}`);
 
-        const response: any = await Promise.race([
-          ai.models.generateContent({
-            model: modelId,
-            contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
-            config: {
-              systemInstruction: systemInstruction,
-              temperature: 0.8
-            }
-          }),
-          timeoutPromise
-        ]);
-        
-        console.timeEnd(`Gemini_Model_${modelId}`);
-        
-        if (response.text) {
-          outputText = response.text;
-          break; // Success! Exit the fallback loop.
+          // Enforce a strict 8s timeout. We increased this from 3.5s to 8s to allow time to generate large paragraphs.
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 8000)
+          );
+
+          const response: any = await Promise.race([
+            ai.models.generateContent({
+              model: modelId,
+              contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
+              config: {
+                systemInstruction: systemInstruction,
+                temperature: 0.8
+              }
+            }),
+            timeoutPromise
+          ]);
+
+          console.timeEnd(`Gemini_Model_${modelId}`);
+
+          if (response.text) {
+            outputText = response.text;
+            break; // Success! Exit the fallback loop.
+          }
+        } catch (error: any) {
+          console.timeEnd(`Gemini_Model_${modelId}`);
+          console.warn(`[Fallback System] Model ${modelId} failed:`, error.message || error);
+          lastError = error;
+          // Continue to the next model...
         }
-      } catch (error: any) {
-        console.timeEnd(`Gemini_Model_${modelId}`);
-        console.warn(`[Fallback System] Model ${modelId} failed:`, error.message || error);
-        lastError = error;
-        // Continue to the next model...
+      }
+
+      // If we made it through all models and still don't have output, we hit a hard rate limit.
+      if (!outputText) {
+        console.warn("All models failed. Waiting 5 seconds before retrying the cascade...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
     console.timeEnd('Gemini_Total_Time');
-
-    if (!outputText) {
-      console.error("All Gemini fallback models failed.");
-      throw lastError || new Error("No response returned from any Gemini model.");
-    }
 
     let jsonString = outputText;
     const jsonMatch = outputText.match(/\{[\s\S]*\}/);
@@ -124,38 +126,10 @@ You MUST output your response as a valid JSON object matching this exact structu
     }
     const parsedData = JSON.parse(jsonString);
 
-    // Immediately call ElevenLabs from the server using a verified free-tier default voice
-    const voiceId = process.env.ELEVENLABS_VOICE_ID_EVE || 'EXAVITQu4vr4xnSDxMaL';
+    return NextResponse.json(parsedData);
 
-    console.time('ElevenLabs_TTS_Time');
-    const ttsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': elevenLabsApiKey,
-      },
-      body: JSON.stringify({
-        text: parsedData.elevenlabs_spoken_text,
-        model_id: 'eleven_v3_conversational',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    });
-    console.timeEnd('ElevenLabs_TTS_Time');
-
-    if (!ttsResponse.ok) {
-      console.error('TTS Error inside Chat route');
-      return NextResponse.json({ ...parsedData, audioBase64: null });
-    }
-
-    const arrayBuffer = await ttsResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const audioBase64 = buffer.toString('base64');
-
-    return NextResponse.json({ ...parsedData, audioBase64 });
-
-  } catch (error: any) {
-    console.error('Gemini API Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  } catch (error) {
+    console.error('Chat Error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

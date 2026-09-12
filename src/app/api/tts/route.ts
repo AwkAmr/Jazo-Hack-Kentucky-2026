@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    const { text, voice = 'cassidy' } = await request.json();
+    const { searchParams } = new URL(request.url);
+    const text = searchParams.get('text');
+    const voice = searchParams.get('voice') || 'cassidy';
 
     if (!text) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
@@ -16,9 +18,10 @@ export async function POST(request: Request) {
     // Determine the Voice ID based on the selection
     let voiceId = process.env.ELEVENLABS_VOICE_ID_CASSIDY || 'CASSIDY_VOICE_ID_HERE';
     if (voice === 'eve') {
-      voiceId = process.env.ELEVENLABS_VOICE_ID_EVE || 'EVE_VOICE_ID_HERE';
+      voiceId = process.env.ELEVENLABS_VOICE_ID_EVE || 'EXAVITQu4vr4xnSDxMaL';
     }
 
+    // The conversational model streams natively and does not support manual optimize flags
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
       method: 'POST',
       headers: {
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_turbo_v2_5',
+        model_id: 'eleven_v3_conversational',
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,

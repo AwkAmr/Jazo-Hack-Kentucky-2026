@@ -148,41 +148,47 @@ export default function Home() {
     }
   };
 
-  const processAudioStream = (arrayBuffer: ArrayBuffer) => {
+  const processAudioStream = async (text: string) => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     const actx = audioContextRef.current;
     
-    actx.decodeAudioData(arrayBuffer, (buffer) => {
-      if (sourceRef.current) {
-        sourceRef.current.disconnect();
+    // Resume context if suspended
+    if (actx.state === 'suspended') {
+      await actx.resume();
+    }
+
+    if (!analyserRef.current) {
+      analyserRef.current = actx.createAnalyser();
+      analyserRef.current.fftSize = 256;
+    }
+    const analyser = analyserRef.current;
+
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+    }
+    
+    const audioEl = new Audio(`/api/tts?voice=eve&text=${encodeURIComponent(text)}`);
+    audioEl.crossOrigin = "anonymous";
+    
+    const source = actx.createMediaElementSource(audioEl);
+    source.connect(analyser);
+    analyser.connect(actx.destination);
+    
+    sourceRef.current = source as any;
+    
+    audioEl.onended = () => {
+      setIsSpeaking(false);
+      setSpeakVolume(0);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
-      
-      const source = actx.createBufferSource();
-      source.buffer = buffer;
-      
-      const analyser = actx.createAnalyser();
-      analyser.fftSize = 256;
-      analyserRef.current = analyser;
-      
-      source.connect(analyser);
-      analyser.connect(actx.destination);
-      
-      sourceRef.current = source;
-      
-      source.onended = () => {
-        setIsSpeaking(false);
-        setSpeakVolume(0);
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-      };
-      
-      setIsSpeaking(true);
-      source.start(0);
-      monitorVolume();
-    });
+    };
+    
+    setIsSpeaking(true);
+    audioEl.play().catch(e => console.error("Audio playback error:", e));
+    monitorVolume();
   };
 
   const monitorVolume = () => {
@@ -230,15 +236,9 @@ export default function Home() {
       // Append model response to history
       setMessages(prev => [...prev, { role: 'model', parts: [{ text: jazoData.elevenlabs_spoken_text }] }]);
 
-      // 2. Play ElevenLabs TTS from Base64
-      if (jazoData.audioBase64) {
-        const binaryString = window.atob(jazoData.audioBase64);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        processAudioStream(bytes.buffer);
+      // 2. Play ElevenLabs TTS Natively Streamed
+      if (jazoData.elevenlabs_spoken_text) {
+        processAudioStream(jazoData.elevenlabs_spoken_text);
       }
 
     } catch (error: any) {
