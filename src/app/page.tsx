@@ -65,8 +65,8 @@ export default function Home() {
         e.preventDefault();
       }
       
-      // Only start recording if we have started the interview and are not loading/already recording
-      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording) {
+      // Only start recording if we have started the interview and are not loading/already recording/speaking
+      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording && !isSpeaking) {
         startRecording();
       }
     };
@@ -83,7 +83,7 @@ export default function Home() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isLoading, isTranscribing, isRecording, messages.length]);
+  }, [isLoading, isTranscribing, isRecording, isSpeaking, messages.length]);
 
   const startRecording = async () => {
     try {
@@ -147,7 +147,9 @@ export default function Home() {
       const transcribedText = sttData.text;
 
       if (!transcribedText || transcribedText.trim() === '') {
-        throw new Error('No speech detected. Please hold spacebar and try again.');
+        console.warn('No speech detected. Please hold spacebar and try again.');
+        setIsTranscribing(false);
+        return;
       }
 
       // Append transcribed user message
@@ -387,7 +389,7 @@ export default function Home() {
               <JazoFace mood={mood} isSpeaking={isSpeaking} speakVolume={speakVolume} />
             </div>
 
-            {/* Brain Status Overlay */}
+            {/* Brain Status Overlay (Temporarily Hidden)
             {lastJazoResponse && (
               <div style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(224, 247, 250, 0.9)', padding: '15px', borderRadius: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#006064', maxWidth: '300px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
                 <strong>[Jazo's Brain]</strong><br/><br/>
@@ -396,6 +398,7 @@ export default function Home() {
                 Thought: <em>{lastJazoResponse.internal_thought}</em>
               </div>
             )}
+            */}
 
             {/* Wrap Up Button */}
             {!isWrappingUp && !finalStory && !isGeneratingStory && (
