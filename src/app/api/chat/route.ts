@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 export async function POST(request: Request) {
   try {
-    const { messages, voice = 'cassidy' } = await request.json();
+    const { messages } = await request.json();
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
@@ -41,30 +41,32 @@ Schema requirements for jazo_facial_expression: Must be exactly one of: "default
 
     // Flatten the chat history into a single transcript to prevent schema hallucination loops
     const transcript = messages.map((m: any) => `${m.role === 'user' ? 'Amr' : 'Jazo'}: ${m.parts[0].text}`).join('\n\n');
-    
+
     const finalPrompt = `Here is the interview transcript so far:\n\n${transcript}\n\nGenerate your next JSON response to continue the interview!`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.5-flash-lite',
       contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
       config: {
         systemInstruction: systemInstruction,
-        temperature: 0.8,
-        responseMimeType: "application/json"
+        temperature: 0.8
       }
     });
 
-    const outputText = response.text;
+    let outputText = response.text;
     if (!outputText) {
       throw new Error("No response returned from Gemini.");
     }
-    
-    // The SDK with JSON schema should guarantee valid JSON
-    const parsedData = JSON.parse(outputText);
 
-    // SPEED HACK: Immediately call ElevenLabs from the server to save a client round-trip
-    let voiceId = process.env.ELEVENLABS_VOICE_ID_CASSIDY || 'EXAVITQu4vr4xnSDxMaL';
-    if (voice === 'eve') voiceId = process.env.ELEVENLABS_VOICE_ID_EVE || '21m00Tcm4TlvDq8ikWAM';
+    let jsonString = outputText;
+    const jsonMatch = outputText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonString = jsonMatch[0];
+    }
+    const parsedData = JSON.parse(jsonString);
+
+    // Immediately call ElevenLabs from the server using a verified free-tier default voice
+    const voiceId = process.env.ELEVENLABS_VOICE_ID_EVE || 'EXAVITQu4vr4xnSDxMaL';
 
     const ttsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',

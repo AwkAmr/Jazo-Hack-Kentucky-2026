@@ -14,7 +14,6 @@ type JazoResponse = {
 
 export default function Home() {
   const [mood, setMood] = useState<'default' | 'happy' | 'angry' | 'tired' | 'confused' | 'empathetic'>('default');
-  const [selectedVoice, setSelectedVoice] = useState<'cassidy' | 'eve'>('cassidy');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakVolume, setSpeakVolume] = useState(0);
   
@@ -117,7 +116,10 @@ export default function Home() {
         body: JSON.stringify({ messages: currentMessages })
       });
       
-      if (!chatRes.ok) throw new Error('Failed to get chat response');
+      if (!chatRes.ok) {
+        const errorData = await chatRes.json();
+        throw new Error(errorData.error || 'Failed to get chat response');
+      }
       
       const jazoData: JazoResponse = await chatRes.json();
       setLastJazoResponse(jazoData);
@@ -138,9 +140,9 @@ export default function Home() {
         processAudioStream(bytes.buffer);
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Error during interview step. Check console.');
+      alert('Error: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -160,14 +162,7 @@ export default function Home() {
         {/* Header Options */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', paddingBottom: '10px', borderBottom: '1px solid #ddd' }}>
           <h3 style={{ margin: 0, fontSize: '18px', color: '#333', fontFamily: 'sans-serif' }}>Live Interview Loop</h3>
-          <select 
-            value={selectedVoice} 
-            onChange={(e) => setSelectedVoice(e.target.value as any)}
-            style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #ccc' }}
-          >
-            <option value="cassidy">Cassidy Voice</option>
-            <option value="eve">Eve Voice</option>
-          </select>
+          <span style={{ fontSize: '14px', color: '#666' }}>Voice: EVE (Default)</span>
         </div>
         
         {/* Jazo's Internal Brain Viewer */}
