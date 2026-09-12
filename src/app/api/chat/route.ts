@@ -98,7 +98,8 @@ You MUST output your response as a valid JSON object matching this exact structu
     let lastError = null;
 
     console.time('Gemini_Total_Time');
-    while (!outputText) {
+    let retries = 0;
+    while (!outputText && retries < 2) {
       for (const modelId of fallbackModels) {
         try {
           console.time(`Gemini_Model_${modelId}`);
@@ -136,11 +137,17 @@ You MUST output your response as a valid JSON object matching this exact structu
 
       // If we made it through all models and still don't have output, we hit a hard rate limit.
       if (!outputText) {
+        retries++;
+        if (retries >= 2) break;
         console.warn("All models failed. Waiting 5 seconds before retrying the cascade...");
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
     console.timeEnd('Gemini_Total_Time');
+
+    if (!outputText) {
+      return NextResponse.json({ error: 'All AI models failed or timed out. Check API keys and Vercel environment variables.' }, { status: 500 });
+    }
 
     let jsonString = outputText;
     const jsonMatch = outputText.match(/\{[\s\S]*\}/);
