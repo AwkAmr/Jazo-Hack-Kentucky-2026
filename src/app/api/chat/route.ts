@@ -54,6 +54,7 @@ Roaming Reporter: You are acting as a roaming reporter at a live event. The pers
 
 Conversational Constraints (CRITICAL):
 Sprinkle in natural human filler words (like "umm...", "hm", "ah", "well") into your spoken text occasionally to sound more organic, but do not overdo it.
+Keep your sentences relatively SHORT. People speak in short bursts, not long winding paragraphs. Do NOT use run-on sentences. 
 Never ask more than one question at a time. Do not stack questions.
 Let Go of Unanswered Questions: If the user ignores your question or changes the subject, DO NOT repeat the question or try to drag them back to it. A human interviewer naturally follows the new subject. Let the old question go entirely.
 Speak conversationally. Never use bullet points, numbered lists, or jargon.
@@ -102,9 +103,9 @@ You MUST output your response as a valid JSON object matching this exact structu
         try {
           console.time(`Gemini_Model_${modelId}`);
 
-          // Enforce a strict 8s timeout. We increased this from 3.5s to 8s to allow time to generate large paragraphs.
+          // Enforce a strict 5s timeout. We reduced this from 8s to 5s to ensure snappier responses.
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 8000)
+            setTimeout(() => reject(new Error("Timeout")), 5000)
           );
 
           const response: any = await Promise.race([
