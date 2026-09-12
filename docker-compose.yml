@@ -1,0 +1,63 @@
+# Two containers: the Next.js server, and Caddy in front of it terminating TLS.
+#
+# Caddy is not decoration here — push-to-talk calls getUserMedia, which browsers
+# only permit in a secure context, so the app is unusable over plain http on an
+# IP address. Caddy gets a real certificate automatically from JAZO_DOMAIN.
+#
+# Config comes from a single `.env` beside this file (see .env.example). Compose
+# reads it for the ${...} below, and hands the whole file to the app container.
+
+services:
+  jazo:
+    build: .
+    restart: unless-stopped
+    # API keys are read at request time, so they are injected here rather than
+    # baked into the image.
+    #
+    # Both optional, and both read when present: `.env` is what you create on
+    # the server, `.env.local` is what `next dev` already uses on a dev machine.
+    # Accepting either means running this stack locally needs no extra file.
+    # A missing key is not a startup error - ask /api/health which ones landed.
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
+    # Not `ports:` — only Caddy is exposed to the internet. Publishing 3000
+    # would let people reach the app over http and bypass TLS.
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # 80 stays open on purpose: it serves the ACME HTTP-01 challenge and
+      # redirects human traffic to https.
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Defaults live here, not in the Caddyfile: compose always defines these
+      # keys, so an unset variable arrives as an empty string and Caddy's own
+      # `{$VAR:default}` syntax (which only covers *unset*) would never fire.
+      # `:-` covers unset and empty both.
+      #
+      # Defaulting to localhost makes `docker compose up` work as-is on a dev
+      # machine, with a cert from Caddy's internal CA. Forgetting to set the
+      # real domain on the server is not silent: the browser gets a name
+      # mismatch and the site does not load.
+      JAZO_DOMAIN: ${JAZO_DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here. Without this volume every restart re-requests
+      # one and you will hit Let's Encrypt rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - jazo
+
+volumes:
+  caddy_data:
+  caddy_config:

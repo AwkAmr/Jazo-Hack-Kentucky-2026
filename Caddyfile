@@ -1,0 +1,29 @@
+{
+	# Contact address for Let's Encrypt expiry notices. Defaulted because an
+	# empty value is a Caddyfile parse error, and that error names line 3
+	# rather than the variable you actually forgot to set.
+	email {$ACME_EMAIL:admin@localhost}
+}
+
+# No default on purpose. If JAZO_DOMAIN is unset Caddy refuses to start, which
+# is what we want — the alternative is serving on some other hostname and
+# leaving the real domain without a certificate, breaking the microphone.
+{$JAZO_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy jazo:3000 {
+		# /api/tts streams MP3 as ElevenLabs produces it. Caddy buffers proxied
+		# responses by default, which would hold the whole clip back and add a
+		# visible delay before Jazo's first word. -1 flushes immediately.
+		flush_interval -1
+	}
+
+	# Push-to-talk calls getUserMedia, which browsers only allow in a secure
+	# context. HSTS keeps the browser on https so the mic never silently dies
+	# on an http:// visit.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	log {
+		output stdout
+	}
+}

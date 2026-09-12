@@ -4,6 +4,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import JazoFace from '@/components/JazoFace';
 
 type Message = { role: 'user' | 'model'; parts: { text: string }[] };
+
+// Fixed height shared by the transcript composer's text box and Send button, so
+// the two sit flush. 20px line + 15px padding + 1px border, top and bottom.
+const COMPOSER_HEIGHT = 52;
+
+// True when keystrokes belong to a form field, so global shortcuts should stay out of the way.
+const isTypingTarget = (target: EventTarget | null) => {
+  const el = target as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable;
+};
+
 type JazoResponse = {
   internal_thought: string;
   jazo_facial_expression: 'default' | 'happy' | 'angry' | 'tired' | 'confused' | 'empathetic';
@@ -35,8 +47,13 @@ export default function Home() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const isRecordingRef = useRef(false);
-  
+
+  // Typed answers from the transcript tab, as an alternative to push-to-talk
+  const [textInput, setTextInput] = useState('');
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
+
   const audioContextRef = useRef<AudioContext | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -66,23 +83,29 @@ export default function Home() {
   // Push-to-talk Spacebar logic
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // A space typed into the transcript composer (or an assignment field) is
+      // a space, not a push-to-talk trigger.
+      if (isTypingTarget(e.target)) return;
+
       // Prevent default scrolling when hitting spacebar
       if (e.code === 'Space' && e.target === document.body) {
         e.preventDefault();
       }
-      
+
       // Only start recording if we have started the interview and are not loading/already recording/speaking
       if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording && !isSpeaking) {
         startRecording();
       }
     };
-    
+
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      // Guarded on the ref rather than the event target so a recording always
+      // gets stopped, even if focus moved into a text field mid-hold.
+      if (e.code === 'Space' && isRecordingRef.current) {
         stopRecording();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
@@ -216,7 +239,8 @@ export default function Home() {
     analyser.connect(actx.destination);
     
     sourceRef.current = source as any;
-    
+    audioElRef.current = audioEl;
+
     audioEl.onended = () => {
       setIsSpeaking(false);
       setSpeakVolume(0);
@@ -224,10 +248,23 @@ export default function Home() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-    
+
     setIsSpeaking(true);
     audioEl.play().catch(e => console.error("Audio playback error:", e));
     monitorVolume();
+  };
+
+  // Cuts Jazo off mid-sentence. `onended` never fires on a pause, so this has
+  // to clear the speaking state itself.
+  const stopSpeaking = () => {
+    audioElRef.current?.pause();
+    audioElRef.current = null;
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    setIsSpeaking(false);
+    setSpeakVolume(0);
   };
 
   const monitorVolume = () => {
@@ -244,6 +281,31 @@ export default function Home() {
     setSpeakVolume(normalized);
     
     animationFrameRef.current = requestAnimationFrame(monitorVolume);
+  };
+
+  // Deliberately ignores `isSpeaking` — you can type over Jazo and send while
+  // he's still talking. Only a turn actually in flight blocks a send.
+  const isTurnInFlight = isLoading || isTranscribing || isRecording;
+  const canSendText =
+    messages.length > 0 && !isTurnInFlight && !isWrappingUp && !isGeneratingStory && !finalStory;
+
+  // Typed equivalent of processAudioUpload: skips STT and goes straight to the chat turn.
+  const sendTextMessage = async () => {
+    const text = textInput.trim();
+    if (!text || !canSendText) return;
+
+    // Interrupt the current reply so it can't talk over the next one.
+    if (isSpeaking) stopSpeaking();
+
+    const userMsg: Message = { role: 'user', parts: [{ text }] };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    setTextInput('');
+    // Clicking Send moves focus to the button; put it back so the next answer
+    // can be typed straight away (and so SPACE doesn't re-trigger the button).
+    textInputRef.current?.focus();
+
+    await fetchTurn(updatedMessages);
   };
 
   const generateFinalStory = async (transcriptMessages: Message[], assignmentContext: string) => {
@@ -351,6 +413,26 @@ export default function Home() {
     await fetchTurn(messages, true);
   };
 
+  // Shared by the Visual and Transcript tabs so the control looks and behaves
+  // identically in both. Positioning is left to whichever tab renders it.
+  const wrapUpControl = !finalStory && !isGeneratingStory && messages.length > 0
+    ? isWrappingUp
+      ? (
+        <div style={{ background: '#34c759', color: '#fff', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(52, 199, 89, 0.3)' }}>
+          Wrapping up...
+        </div>
+      )
+      : (
+        <button
+          onClick={wrapUpInterview}
+          disabled={isLoading || isTranscribing}
+          style={{ background: isLoading || isTranscribing ? '#ccc' : '#ff3b30', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', cursor: isLoading || isTranscribing ? 'not-allowed' : 'pointer', boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)' }}
+        >
+          Wrap Up Interview
+        </button>
+      )
+    : null;
+
   return (
     <main style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', boxSizing: 'border-box' }}>
       
@@ -444,18 +526,9 @@ export default function Home() {
             */}
 
             {/* Wrap Up Button */}
-            {!isWrappingUp && !finalStory && !isGeneratingStory && messages.length > 0 && (
-              <button
-                onClick={wrapUpInterview}
-                disabled={isLoading || isTranscribing}
-                style={{ position: 'absolute', top: '20px', right: '20px', background: isLoading || isTranscribing ? '#ccc' : '#ff3b30', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', cursor: isLoading || isTranscribing ? 'not-allowed' : 'pointer', boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)' }}
-              >
-                Wrap Up Interview
-              </button>
-            )}
-            {isWrappingUp && !finalStory && !isGeneratingStory && (
-              <div style={{ position: 'absolute', top: '20px', right: '20px', background: '#34c759', color: '#fff', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(52, 199, 89, 0.3)' }}>
-                Wrapping up...
+            {wrapUpControl && (
+              <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
+                {wrapUpControl}
               </div>
             )}
 
@@ -477,14 +550,79 @@ export default function Home() {
 
           </div>
         ) : activeTab === 'transcript' ? (
-          <div style={{ padding: '20px', overflowY: 'auto', flex: 1, backgroundColor: '#fafafa' }}>
-            <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {messages.map((msg, i) => (
-                <div key={i} style={{ padding: '15px 20px', borderRadius: '15px', background: msg.role === 'user' ? '#00e5ff' : '#fff', color: msg.role === 'user' ? '#000' : '#333', alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                  <p style={{ margin: 0, lineHeight: 1.5 }}>{msg.parts[0].text}</p>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#fafafa' }}>
+            {/* Same wrap-up control as the Visual tab. In flow rather than
+                absolute here, so it can't sit on top of the message list. */}
+            {wrapUpControl && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '20px 20px 0' }}>
+                {wrapUpControl}
+              </div>
+            )}
+
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {messages.map((msg, i) => (
+                  <div key={i} style={{ padding: '15px 20px', borderRadius: '15px', background: msg.role === 'user' ? '#00e5ff' : '#fff', color: msg.role === 'user' ? '#000' : '#333', alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                    <p style={{ margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.parts[0].text}</p>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+            </div>
+
+            {/* Type an answer instead of holding SPACE to speak it */}
+            <div style={{ borderTop: '1px solid #eee', background: '#fff', padding: '15px 20px' }}>
+              <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+                  <textarea
+                    ref={textInputRef}
+                    value={textInput}
+                    onChange={e => setTextInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendTextMessage();
+                      }
+                    }}
+                    placeholder="Type your answer to Jazo..."
+                    style={{
+                      flex: 1, minWidth: 0,
+                      height: `${COMPOSER_HEIGHT}px`,
+                      boxSizing: 'border-box', padding: '15px 18px',
+                      borderRadius: '12px', border: '1px solid #ccc',
+                      fontSize: '16px', fontFamily: 'inherit', lineHeight: '20px',
+                      resize: 'none', overflowY: 'auto', display: 'block'
+                    }}
+                  />
+                  <button
+                    onClick={sendTextMessage}
+                    disabled={!canSendText || textInput.trim() === ''}
+                    style={{
+                      flexShrink: 0, width: '96px', height: `${COMPOSER_HEIGHT}px`,
+                      boxSizing: 'border-box', padding: 0,
+                      background: !canSendText || textInput.trim() === '' ? '#ccc' : '#00e5ff',
+                      color: '#000', border: 'none', borderRadius: '12px',
+                      fontWeight: 'bold', fontSize: '16px', lineHeight: '20px',
+                      cursor: !canSendText || textInput.trim() === '' ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Send
+                  </button>
                 </div>
-              ))}
-              <div ref={chatEndRef} />
+                <span style={{ color: '#999', fontSize: '13px', fontFamily: 'sans-serif' }}>
+                  {isTranscribing
+                    ? 'Transcribing your voice...'
+                    : isLoading
+                      ? 'Jazo is thinking...'
+                      : isRecording
+                        ? 'Listening...'
+                        : isWrappingUp || isGeneratingStory || finalStory
+                          ? 'Interview complete.'
+                          : isSpeaking
+                            ? 'Jazo is speaking — send anyway to cut him off.'
+                            : 'Enter to send, Shift+Enter for a new line — or click outside this box and hold SPACE to speak.'}
+                </span>
+              </div>
             </div>
           </div>
         ) : activeTab === 'story' ? (

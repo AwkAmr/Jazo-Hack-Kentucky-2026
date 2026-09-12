@@ -1,0 +1,31 @@
+# Keep the build context small and secrets out of the image.
+# Everything here is either rebuilt, irrelevant, or must not be baked in.
+
+node_modules
+.next
+out
+build
+
+# Secrets. Runtime config is injected by docker-compose's env_file instead,
+# so a single image is safe to rebuild and promote.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+.claude
+
+# Sibling prototypes, not part of the Next app
+HackKentucky_GUI
+RoboEyes
+prototype.html
+
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+.DS_Store
+README.md
+DEPLOY.md
+AGENTS.md
+CLAUDE.md
