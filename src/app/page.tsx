@@ -310,6 +310,10 @@ export default function Home() {
       }
       
       const jazoData: JazoResponse = await chatRes.json();
+      if (wrapUp) {
+        jazoData.interview_progress = 'complete';
+      }
+      
       setLastJazoResponse(jazoData);
       setMood(jazoData.jazo_facial_expression);
 
@@ -323,16 +327,6 @@ export default function Home() {
         processAudioStream(jazoData.elevenlabs_spoken_text);
       }
 
-      // 3. Trigger Generation if Complete. A wrap-up turn always ends the
-      // interview — we don't depend on the model remembering to report
-      // "complete" in interview_progress.
-      if (
-        wrapUp ||
-        jazoData.interview_progress === 'complete' ||
-        jazoData.interview_progress === 'completed'
-      ) {
-        generateFinalStory(finalMessages, fullAssignment);
-      }
 
     } catch (error: any) {
       console.error(error);
