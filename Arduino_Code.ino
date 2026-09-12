@@ -58,8 +58,8 @@ Adafruit_Protomatter matrix(
 // Constant eye color (mood is shown via shape, not color -- matching the
 // real web app, which always uses one color and changes shape per mood).
 // Adjust these three numbers (R, G, B, each 0-255) to change the shade.
-#define EYE_COLOR_R 20
-#define EYE_COLOR_G 110
+#define EYE_COLOR_R 0
+#define EYE_COLOR_G 229
 #define EYE_COLOR_B 255
 
 // ---------------------------------------------------------------------------
