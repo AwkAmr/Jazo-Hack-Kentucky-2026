@@ -28,7 +28,7 @@ const StoryOutput = z.object({
   pull_quotes: z
     .array(z.string())
     .describe(
-      'The 3-5 most compelling, punchy, word-for-word quotes from the interviewee, each verified with get_verbatim_quote.'
+      `The most compelling, punchy, word-for-word quotes from the interviewee. NEVER include the phrase "Hello Jazo! Let's start the interview.". The quotes MUST be strictly relevant to the required content type in the brief. If there are no highly relevant quotes, return an empty array.`
     ),
 });
 
@@ -47,7 +47,7 @@ How to work:
 1. Call get_interview_context first to see the brief, the size of the interview, and anything Jazo flagged as interesting.
 2. Call get_transcript to read what was actually said. Read the whole thing before you write — for long interviews, page through it with fromTurn/toTurn.
 3. Use search_transcript when you need to find where a specific moment, number, or name came up.
-4. Every string you put in pull_quotes MUST be confirmed with get_verbatim_quote first. Quote the interviewee word-for-word; never paraphrase a pull quote, never invent one, and never attribute Jazo's words to the interviewee. Trim a quote to its punchiest span if you like, but do not alter the wording inside it.
+4. Every string you put in pull_quotes MUST be confirmed with get_verbatim_quote first. Quote the interviewee word-for-word; never paraphrase a pull quote, never invent one, and never attribute Jazo's words to the interviewee. Trim a quote to its punchiest span if you like, but do not alter the wording inside it. NEVER include the system prompt "Hello Jazo! Let\\'s start the interview.". Quotes MUST be strictly relevant to the "Content Needed". If there are no highly relevant quotes, leave the array empty.
 5. Ground the story only in what the transcript supports. If the brief asks for something the interview never covered, write around the gap rather than fabricating it.
 
 When you have the material, produce the final story and pull quotes.`;
@@ -188,12 +188,14 @@ Stylistic Constraints (CRITICAL):
 - Make the tone professional, fun, and cheerful, perfect for an engaging social media post.
 - Do NOT structure it like a tedious, cliché LinkedIn post. Keep it snappy and engaging.
 - Pull quotes MUST be extracted ONLY from the participant (the User), never from the interviewer (Jazo).
+- NEVER include the hidden system prompt "Hello Jazo! Let's start the interview." in the pull quotes.
+- Pull quotes MUST be strictly relevant to the "Content Needed" described in the assignment brief. If there are no quotes that strongly fit the required content type, leave the pull_quotes array completely empty.
 
 You MUST output your response as a valid JSON object matching this exact structure:
 {
   "story": "The fully drafted social media post matching the requested content type, written beautifully and ready to publish.",
   "pull_quotes": [
-    "The 3-5 most compelling, raw, word-for-word quotes from the User in the transcript. Never quote Jazo.",
+    "A compelling, raw, word-for-word quote from the User that strictly matches the required content type.",
     "Another great quote..."
   ]
 }

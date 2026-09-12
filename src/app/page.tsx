@@ -348,6 +348,17 @@ export default function Home() {
     await fetchTurn(initialMessages);
   };
 
+  const resetInterview = () => {
+    setMessages([]);
+    setFinalStory(null);
+    setIsWrappingUp(false);
+    setIsGeneratingStory(false);
+    setActiveTab('visual');
+    setLastJazoResponse(null);
+    setMood('default');
+    interviewIdRef.current = null;
+  };
+
   // `wrapUp` is passed explicitly rather than read from state: the wrap-up
   // button calls this in the same tick it flips `isWrappingUp`, and the state
   // update wouldn't be visible in this closure yet.
@@ -372,6 +383,10 @@ export default function Home() {
       }
       
       const jazoData: JazoResponse = await chatRes.json();
+      if (wrapUp) {
+        jazoData.interview_progress = 'complete';
+      }
+      
       setLastJazoResponse(jazoData);
       setMood(jazoData.jazo_facial_expression);
 
@@ -385,16 +400,6 @@ export default function Home() {
         processAudioStream(jazoData.elevenlabs_spoken_text);
       }
 
-      // 3. Trigger Generation if Complete. A wrap-up turn always ends the
-      // interview — we don't depend on the model remembering to report
-      // "complete" in interview_progress.
-      if (
-        wrapUp ||
-        jazoData.interview_progress === 'complete' ||
-        jazoData.interview_progress === 'completed'
-      ) {
-        generateFinalStory(finalMessages, fullAssignment);
-      }
 
     } catch (error: any) {
       console.error(error);
@@ -437,31 +442,81 @@ export default function Home() {
     <main style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', boxSizing: 'border-box' }}>
       
       {/* Navigation Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #eee', padding: '10px 20px', gap: '15px' }}>
-        <button 
-          onClick={() => setActiveTab('visual')}
-          style={{ padding: '8px 16px', background: activeTab === 'visual' ? '#00e5ff' : 'transparent', color: activeTab === 'visual' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
-        >
-          Visual
-        </button>
-        <button 
-          onClick={() => setActiveTab('transcript')}
-          style={{ padding: '8px 16px', background: activeTab === 'transcript' ? '#00e5ff' : 'transparent', color: activeTab === 'transcript' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
-        >
-          Transcript
-        </button>
-        <button 
-          onClick={() => setActiveTab('assignment')}
-          style={{ padding: '8px 16px', background: activeTab === 'assignment' ? '#00e5ff' : 'transparent', color: activeTab === 'assignment' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
-        >
-          Assignment
-        </button>
-        <button 
-          onClick={() => setActiveTab('story')}
-          style={{ padding: '8px 16px', background: activeTab === 'story' ? '#00e5ff' : 'transparent', color: activeTab === 'story' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
-        >
-          Final Story
-        </button>
+      <div style={{ display: 'flex', borderBottom: '1px solid #eee', padding: '10px 20px', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '15px' }}>
+          <button 
+            onClick={() => setActiveTab('visual')}
+            style={{ padding: '8px 16px', background: activeTab === 'visual' ? '#00e5ff' : 'transparent', color: activeTab === 'visual' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Visual
+          </button>
+          <button 
+            onClick={() => setActiveTab('transcript')}
+            style={{ padding: '8px 16px', background: activeTab === 'transcript' ? '#00e5ff' : 'transparent', color: activeTab === 'transcript' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Transcript
+          </button>
+          <button 
+            onClick={() => setActiveTab('assignment')}
+            style={{ padding: '8px 16px', background: activeTab === 'assignment' ? '#00e5ff' : 'transparent', color: activeTab === 'assignment' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Assignment
+          </button>
+          <button 
+            onClick={() => setActiveTab('story')}
+            style={{ padding: '8px 16px', background: activeTab === 'story' ? '#00e5ff' : 'transparent', color: activeTab === 'story' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Final Story
+          </button>
+        </div>
+
+        {/* Wrap Up & Reset Action Buttons */}
+        <div>
+          {!isWrappingUp && !finalStory && !isGeneratingStory && messages.length > 0 && (
+            <button
+              onClick={wrapUpInterview}
+              disabled={isLoading || isTranscribing}
+              style={{ 
+                background: isLoading || isTranscribing ? '#ccc' : '#ff3b30', 
+                color: '#fff', 
+                border: 'none', 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '50%', 
+                fontWeight: 'bold', 
+                cursor: isLoading || isTranscribing ? 'not-allowed' : 'pointer', 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center',
+                boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)' 
+              }}
+              title="Wrap Up Interview"
+            >
+              ✕
+            </button>
+          )}
+          {isWrappingUp && !finalStory && !isGeneratingStory && (
+            <span style={{ color: '#34c759', fontWeight: 'bold', fontSize: '14px', marginRight: '10px' }}>Wrapping up...</span>
+          )}
+          {(finalStory || isWrappingUp || isGeneratingStory) && (
+            <button
+              onClick={resetInterview}
+              style={{ 
+                background: '#00e5ff', 
+                color: '#000', 
+                border: 'none', 
+                padding: '8px 16px',
+                borderRadius: '16px', 
+                fontWeight: 'bold', 
+                cursor: 'pointer', 
+                boxShadow: '0 2px 8px rgba(0, 229, 255, 0.4)' 
+              }}
+              title="Start New Interview"
+            >
+              Reset Interview
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
