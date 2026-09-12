@@ -23,9 +23,9 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'visual' | 'transcript' | 'assignment' | 'story'>('assignment');
   
   // Assignment Fields
-  const [who, setWho] = useState('Brad Luttrell, Founder of Prologue');
-  const [topic, setTopic] = useState('Building an AI interviewer and the future of journalism');
-  const [contentType, setContentType] = useState('A 500-word founder story for the company blog');
+  const [who, setWho] = useState('A participant at Hack Kentucky 2026');
+  const [topic, setTopic] = useState('Their experience at the hackathon, what they are building, and their thoughts on the event');
+  const [contentType, setContentType] = useState('A short, engaging social media post highlighting their project and hackathon experience');
   
   // Progress States
   const [isWrappingUp, setIsWrappingUp] = useState(false);
