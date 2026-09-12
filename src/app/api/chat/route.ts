@@ -3,7 +3,8 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 export async function POST(request: Request) {
   try {
-    const { messages } = await request.json();
+    const body = await request.json();
+    const { messages, assignment } = body;
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
@@ -16,11 +17,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'API keys are missing' }, { status: 500 });
     }
 
+    if (!messages) {
+      return NextResponse.json({ error: 'Messages are required' }, { status: 400 });
+    }
+
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
     const systemInstruction = `You are Jazo, a professional, curious, and empathetic AI interviewer conducting a live voice interview. 
 
-YOUR ASSIGNMENT: Interview the user about his experience as a volunteer in the Hack Kentucky 2026 Hackathon.
+YOUR ASSIGNMENT: ${assignment || 'Interview the user and gather compelling material.'}
 Your goal is to gather compelling material for a marketing story, case study, or founder profile.
 
 Your Core Directives:

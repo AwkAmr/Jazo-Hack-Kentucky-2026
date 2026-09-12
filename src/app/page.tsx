@@ -20,7 +20,8 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastJazoResponse, setLastJazoResponse] = useState<JazoResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<'visual' | 'transcript'>('visual');
+  const [activeTab, setActiveTab] = useState<'visual' | 'transcript' | 'assignment'>('visual');
+  const [assignmentText, setAssignmentText] = useState('Interview the user about his experience as a volunteer in the Hack Kentucky 2026 Hackathon.');
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   
@@ -214,7 +215,7 @@ export default function Home() {
       const chatRes = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: currentMessages })
+        body: JSON.stringify({ messages: currentMessages, assignment: assignmentText })
       });
       
       if (!chatRes.ok) {
@@ -265,10 +266,29 @@ export default function Home() {
         >
           Transcript
         </button>
+        <button 
+          onClick={() => setActiveTab('assignment')}
+          style={{ padding: '8px 16px', background: activeTab === 'assignment' ? '#00e5ff' : 'transparent', color: activeTab === 'assignment' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          Assignment
+        </button>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {messages.length === 0 ? (
+        {activeTab === 'assignment' ? (
+          <div style={{ padding: '40px', flex: 1, backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ maxWidth: '800px', width: '100%', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <h2 style={{ margin: 0, color: '#333', fontFamily: 'sans-serif' }}>Jazo's Assignment Brief</h2>
+              <p style={{ color: '#666', margin: 0 }}>This text is injected directly into Jazo's system instructions. Update it to completely change the goal of the interview.</p>
+              <textarea 
+                value={assignmentText}
+                onChange={(e) => setAssignmentText(e.target.value)}
+                style={{ width: '100%', height: '300px', padding: '20px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '16px', fontFamily: 'sans-serif', resize: 'vertical', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}
+                placeholder="Type Jazo's assignment here..."
+              />
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <button 
               onClick={startInterview}
@@ -313,25 +333,18 @@ export default function Home() {
             </div>
 
           </div>
-        ) : (
-          // TRANSCRIPT TAB
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '40px', background: '#f9f9f9', overflowY: 'auto' }}>
-            <div style={{ maxWidth: '800px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {messages.map((msg, i) => {
-                // Skip the hidden system prompt
-                if (i === 0 && msg.role === 'user') return null;
-                
-                return (
-                  <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', background: msg.role === 'user' ? '#007bff' : '#fff', color: msg.role === 'user' ? '#fff' : '#333', padding: '15px 20px', borderRadius: '15px', border: msg.role === 'user' ? 'none' : '1px solid #ccc', fontFamily: 'sans-serif', fontSize: '16px', lineHeight: '1.5', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
-                    {msg.role === 'model' && <strong style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Jazo:</strong>}
-                    {msg.parts[0].text}
-                  </div>
-                );
-              })}
+        ) : activeTab === 'transcript' ? (
+          <div style={{ padding: '20px', overflowY: 'auto', flex: 1, backgroundColor: '#fafafa' }}>
+            <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {messages.map((msg, i) => (
+                <div key={i} style={{ padding: '15px 20px', borderRadius: '15px', background: msg.role === 'user' ? '#00e5ff' : '#fff', color: msg.role === 'user' ? '#000' : '#333', alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                  <p style={{ margin: 0, lineHeight: 1.5 }}>{msg.parts[0].text}</p>
+                </div>
+              ))}
               <div ref={chatEndRef} />
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </main>
   );
