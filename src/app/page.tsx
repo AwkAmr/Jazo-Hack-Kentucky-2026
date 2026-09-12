@@ -34,6 +34,7 @@ export default function Home() {
   
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -86,6 +87,10 @@ export default function Home() {
   }, [isLoading, isTranscribing, isRecording, isSpeaking, messages.length]);
 
   const startRecording = async () => {
+    if (isRecordingRef.current) return;
+    isRecordingRef.current = true;
+    setIsRecording(true);
+
     try {
       // Request low-spec audio for faster upload/processing
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -95,6 +100,12 @@ export default function Home() {
       let options = {};
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         options = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 16000 };
+      }
+      
+      // If user released spacebar while we were waiting for mic permissions/stream
+      if (!isRecordingRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
       
       const recorder = new MediaRecorder(stream, options);
@@ -113,17 +124,21 @@ export default function Home() {
       };
 
       recorder.start();
-      setIsRecording(true);
     } catch (err) {
       console.error("Mic error", err);
+      isRecordingRef.current = false;
+      setIsRecording(false);
       alert("Microphone access denied or not available.");
     }
   };
 
   const stopRecording = () => {
+    if (isRecordingRef.current) {
+      isRecordingRef.current = false;
+      setIsRecording(false);
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
     }
   };
 
@@ -163,7 +178,6 @@ export default function Home() {
 
     } catch (err: any) {
       console.error(err);
-      alert('Error: ' + err.message);
       setIsTranscribing(false);
     }
   };
