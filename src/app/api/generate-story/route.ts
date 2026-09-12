@@ -42,7 +42,7 @@ DO NOT include any markdown code block wrappers (like \`\`\`json) in your final 
 
     console.time('Story_Generation_Time');
 
-    const fallbackModels = ['gemini-1.5-pro', 'gemini-1.5-pro-001', 'gemini-1.5-pro-002', 'gemini-2.5-pro', 'gemini-3.1-pro-preview', 'gemini-3.6-flash'];
+    const fallbackModels = ['gemini-3.1-pro-preview', 'gemini-3-pro-preview', 'gemini-2.5-pro'];
     let response = null;
     let lastError = null;
 
