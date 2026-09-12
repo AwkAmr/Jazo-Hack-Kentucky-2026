@@ -56,13 +56,11 @@
 }
 
 /* Empathetic / Sad (Puppy dog eyes: inner corners high, outer corners droop) */
-.faceContainer.empathetic .eye.left,
-.faceContainer.sad .eye.left {
+.faceContainer.empathetic .eye.left {
   clip-path: polygon(0% 35%, 50% 15%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
 }
 
-.faceContainer.empathetic .eye.right,
-.faceContainer.sad .eye.right {
+.faceContainer.empathetic .eye.right {
   clip-path: polygon(0% 0%, 50% 15%, 100% 35%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%);
 }
 
