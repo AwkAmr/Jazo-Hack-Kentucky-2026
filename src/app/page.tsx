@@ -23,9 +23,9 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'visual' | 'transcript' | 'assignment' | 'story'>('assignment');
   
   // Assignment Fields
-  const [who, setWho] = useState('Brad Luttrell, Founder of Prologue');
-  const [topic, setTopic] = useState('Building an AI interviewer and the future of journalism');
-  const [contentType, setContentType] = useState('A 500-word founder story for the company blog');
+  const [who, setWho] = useState('A participant at Hack Kentucky 2026');
+  const [topic, setTopic] = useState('Their experience at the hackathon, what they are building, and their thoughts on the event');
+  const [contentType, setContentType] = useState('A short, engaging social media post highlighting their project and hackathon experience');
   
   // Progress States
   const [isWrappingUp, setIsWrappingUp] = useState(false);
@@ -34,6 +34,7 @@ export default function Home() {
   
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -54,6 +55,14 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, lastJazoResponse]);
 
+  // Trigger generation when Jazo is finished speaking a completed interview
+  useEffect(() => {
+    if (!isSpeaking && lastJazoResponse && (lastJazoResponse.interview_progress === 'complete' || lastJazoResponse.interview_progress === 'completed') && !finalStory && !isGeneratingStory) {
+      const fullAssignment = `Who is being interviewed: ${who}\nTopic: ${topic}\nContent Needed: ${contentType}`;
+      generateFinalStory(messages, fullAssignment);
+    }
+  }, [isSpeaking, lastJazoResponse, messages, finalStory, isGeneratingStory, who, topic, contentType]);
+
   // Push-to-talk Spacebar logic
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -62,10 +71,8 @@ export default function Home() {
         e.preventDefault();
       }
       
-      // Only start recording if we have started the interview and are not
-      // loading/already recording. Once the interview is wrapping up, the mic
-      // is closed — another turn would re-trigger story generation.
-      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording && !isWrappingUp) {
+      // Only start recording if we have started the interview and are not loading/already recording/speaking
+      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording && !isSpeaking) {
         startRecording();
       }
     };
@@ -82,9 +89,13 @@ export default function Home() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isLoading, isTranscribing, isRecording, isWrappingUp, messages.length]);
+  }, [isLoading, isTranscribing, isRecording, isSpeaking, isWrappingUp, messages.length]);
 
   const startRecording = async () => {
+    if (isRecordingRef.current) return;
+    isRecordingRef.current = true;
+    setIsRecording(true);
+
     try {
       // Request low-spec audio for faster upload/processing
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -94,6 +105,12 @@ export default function Home() {
       let options = {};
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         options = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 16000 };
+      }
+      
+      // If user released spacebar while we were waiting for mic permissions/stream
+      if (!isRecordingRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
       
       const recorder = new MediaRecorder(stream, options);
@@ -112,17 +129,21 @@ export default function Home() {
       };
 
       recorder.start();
-      setIsRecording(true);
     } catch (err) {
       console.error("Mic error", err);
+      isRecordingRef.current = false;
+      setIsRecording(false);
       alert("Microphone access denied or not available.");
     }
   };
 
   const stopRecording = () => {
+    if (isRecordingRef.current) {
+      isRecordingRef.current = false;
+      setIsRecording(false);
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
     }
   };
 
@@ -146,7 +167,9 @@ export default function Home() {
       const transcribedText = sttData.text;
 
       if (!transcribedText || transcribedText.trim() === '') {
-        throw new Error('No speech detected. Please hold spacebar and try again.');
+        console.warn('No speech detected. Please hold spacebar and try again.');
+        setIsTranscribing(false);
+        return;
       }
 
       // Append transcribed user message
@@ -160,7 +183,6 @@ export default function Home() {
 
     } catch (err: any) {
       console.error(err);
-      alert('Error: ' + err.message);
       setIsTranscribing(false);
     }
   };
@@ -249,6 +271,11 @@ export default function Home() {
     } finally {
       setIsGeneratingStory(false);
     }
+  };
+
+  const handleWrapUp = async () => {
+    setIsWrappingUp(true);
+    await fetchTurn(messages, true);
   };
 
   const startInterview = async () => {
@@ -405,7 +432,7 @@ export default function Home() {
               <JazoFace mood={mood} isSpeaking={isSpeaking} speakVolume={speakVolume} />
             </div>
 
-            {/* Brain Status Overlay */}
+            {/* Brain Status Overlay (Temporarily Hidden)
             {lastJazoResponse && (
               <div style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(224, 247, 250, 0.9)', padding: '15px', borderRadius: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#006064', maxWidth: '300px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
                 <strong>[Jazo's Brain]</strong><br/><br/>
@@ -414,6 +441,7 @@ export default function Home() {
                 Thought: <em>{lastJazoResponse.internal_thought}</em>
               </div>
             )}
+            */}
 
             {/* Wrap Up Button */}
             {!isWrappingUp && !finalStory && !isGeneratingStory && messages.length > 0 && (
