@@ -20,8 +20,18 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastJazoResponse, setLastJazoResponse] = useState<JazoResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<'visual' | 'transcript' | 'assignment'>('visual');
-  const [assignmentText, setAssignmentText] = useState('Interview the user and gather compelling material.');
+  const [activeTab, setActiveTab] = useState<'visual' | 'transcript' | 'assignment' | 'story'>('assignment');
+  
+  // Assignment Fields
+  const [who, setWho] = useState('Brad Luttrell, Founder of Prologue');
+  const [topic, setTopic] = useState('Building an AI interviewer and the future of journalism');
+  const [contentType, setContentType] = useState('A 500-word founder story for the company blog');
+  
+  // Progress States
+  const [isWrappingUp, setIsWrappingUp] = useState(false);
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+  const [finalStory, setFinalStory] = useState<{story: string, pull_quotes: string[]} | null>(null);
+  
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   
@@ -207,6 +217,32 @@ export default function Home() {
     animationFrameRef.current = requestAnimationFrame(monitorVolume);
   };
 
+  const generateFinalStory = async (transcriptMessages: Message[], assignmentContext: string) => {
+    setIsGeneratingStory(true);
+    setActiveTab('story'); // Switch to story tab immediately
+    
+    try {
+      const res = await fetch('/api/generate-story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: transcriptMessages, 
+          assignment: assignmentContext 
+        })
+      });
+      
+      if (!res.ok) throw new Error("Failed to generate story");
+      
+      const data = await res.json();
+      setFinalStory(data);
+    } catch (err) {
+      console.error(err);
+      alert("Error generating story. Check console.");
+    } finally {
+      setIsGeneratingStory(false);
+    }
+  };
+
   const startInterview = async () => {
     setIsLoading(true);
     // Send an initial hidden prompt to kick off the conversation based on the brief
@@ -217,11 +253,16 @@ export default function Home() {
   const fetchTurn = async (currentMessages: Message[]) => {
     setIsLoading(true);
     try {
-      // 1. Get Gemini Response
+      const fullAssignment = `Who is being interviewed: ${who}\nTopic: ${topic}\nContent Needed: ${contentType}`;
+      
       const chatRes = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: currentMessages, assignment: assignmentText })
+        body: JSON.stringify({ 
+          messages: currentMessages, 
+          assignment: fullAssignment,
+          wrapUp: isWrappingUp 
+        })
       });
       
       if (!chatRes.ok) {
@@ -239,6 +280,11 @@ export default function Home() {
       // 2. Play ElevenLabs TTS Natively Streamed
       if (jazoData.elevenlabs_spoken_text) {
         processAudioStream(jazoData.elevenlabs_spoken_text);
+      }
+
+      // 3. Trigger Generation if Complete
+      if (jazoData.interview_progress === 'complete' || jazoData.interview_progress === 'completed') {
+        generateFinalStory(currentMessages, fullAssignment);
       }
 
     } catch (error: any) {
@@ -272,20 +318,44 @@ export default function Home() {
         >
           Assignment
         </button>
+        <button 
+          onClick={() => setActiveTab('story')}
+          style={{ padding: '8px 16px', background: activeTab === 'story' ? '#00e5ff' : 'transparent', color: activeTab === 'story' ? '#000' : '#666', border: 'none', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          Final Story
+        </button>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {activeTab === 'assignment' ? (
           <div style={{ padding: '40px', flex: 1, backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ maxWidth: '800px', width: '100%', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <div style={{ maxWidth: '800px', width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <h2 style={{ margin: 0, color: '#333', fontFamily: 'sans-serif' }}>Jazo's Assignment Brief</h2>
-              <p style={{ color: '#666', margin: 0 }}>This text is injected directly into Jazo's system instructions. Update it to completely change the goal of the interview.</p>
-              <textarea 
-                value={assignmentText}
-                onChange={(e) => setAssignmentText(e.target.value)}
-                style={{ width: '100%', height: '300px', padding: '20px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '16px', fontFamily: 'sans-serif', resize: 'vertical', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}
-                placeholder="Type Jazo's assignment here..."
-              />
+              <p style={{ color: '#666', margin: 0 }}>Define exactly who Jazo is interviewing and what content you need.</p>
+              
+              <div>
+                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>Who is being interviewed? (Name, Title, Role)</label>
+                <input 
+                  type="text" value={who} onChange={e => setWho(e.target.value)}
+                  style={{ width: '100%', padding: '15px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '16px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>What is the topic of the interview?</label>
+                <input 
+                  type="text" value={topic} onChange={e => setTopic(e.target.value)}
+                  style={{ width: '100%', padding: '15px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '16px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>What content is needed? (e.g. Founder Story, Case Study)</label>
+                <textarea 
+                  value={contentType} onChange={e => setContentType(e.target.value)}
+                  style={{ width: '100%', height: '100px', padding: '15px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '16px', resize: 'vertical' }}
+                />
+              </div>
             </div>
           </div>
         ) : messages.length === 0 ? (
@@ -316,6 +386,21 @@ export default function Home() {
               </div>
             )}
 
+            {/* Wrap Up Button */}
+            {!isWrappingUp && !finalStory && !isGeneratingStory && (
+              <button 
+                onClick={() => setIsWrappingUp(true)}
+                style={{ position: 'absolute', top: '20px', right: '20px', background: '#ff3b30', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)' }}
+              >
+                Wrap Up Interview
+              </button>
+            )}
+            {isWrappingUp && !finalStory && !isGeneratingStory && (
+              <div style={{ position: 'absolute', top: '20px', right: '20px', background: '#34c759', color: '#fff', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(52, 199, 89, 0.3)' }}>
+                Wrapping up...
+              </div>
+            )}
+
             {/* Mic Indicator Overlay */}
             <div style={{ position: 'absolute', bottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
               <div style={{ 
@@ -342,6 +427,38 @@ export default function Home() {
                 </div>
               ))}
               <div ref={chatEndRef} />
+            </div>
+          </div>
+        ) : activeTab === 'story' ? (
+          <div style={{ padding: '40px', overflowY: 'auto', flex: 1, backgroundColor: '#fafafa' }}>
+            <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+              {isGeneratingStory ? (
+                <div style={{ textAlign: 'center', marginTop: '100px' }}>
+                  <h2>Generating your final asset...</h2>
+                  <p style={{ color: '#666' }}>Jazo is reviewing the transcript and writing the story.</p>
+                </div>
+              ) : finalStory ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+                  <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                    <h2 style={{ marginTop: 0, color: '#333' }}>Final Marketing Story</h2>
+                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#444' }}>{finalStory.story}</div>
+                  </div>
+                  
+                  <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', borderLeft: '5px solid #00e5ff', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                    <h2 style={{ marginTop: 0, color: '#333' }}>Pull Quotes</h2>
+                    <ul style={{ paddingLeft: '20px', color: '#555', margin: 0, display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      {finalStory.pull_quotes.map((quote, idx) => (
+                        <li key={idx} style={{ fontSize: '18px', fontStyle: 'italic', fontWeight: '500' }}>"{quote}"</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', marginTop: '100px', color: '#666' }}>
+                  <h2>No story generated yet.</h2>
+                  <p>Complete an interview to generate the final marketing asset.</p>
+                </div>
+              )}
             </div>
           </div>
         ) : null}

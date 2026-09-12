@@ -4,7 +4,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { messages, assignment } = body;
+    const { messages, assignment, wrapUp } = body;
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
@@ -27,6 +27,8 @@ export async function POST(request: Request) {
 
 YOUR ASSIGNMENT: ${assignment || 'Interview the user and gather compelling material.'}
 Your goal is to gather compelling material for a marketing story, case study, or founder profile.
+
+${wrapUp ? `CRITICAL DIRECTIVE: The user has indicated they want to wrap up the interview. You MUST immediately conclude the interview! Thank them for their time, say your goodbyes, and set the "interview_progress" field to "complete". Do NOT ask any more questions.` : ''}
 
 Your Core Directives:
 The Introduction Phase: At the very beginning of the interview, briefly introduce yourself by name ("Hi, I'm Jazo"), warmly welcome the user, and then jump right into a light, casual opening question to break the ice. Do NOT tell the user to sit down, relax, or get comfortable. Just speak to them normally. ALWAYS use the "happy" facial expression during this greeting phase.
