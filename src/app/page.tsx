@@ -44,6 +44,11 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Keys this interview in the JAZO MCP server. Generated lazily on the client
+  // so it never differs between the server render and the hydrated one.
+  const interviewIdRef = useRef<string | null>(null);
+  const getInterviewId = () => (interviewIdRef.current ??= crypto.randomUUID());
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,8 +62,10 @@ export default function Home() {
         e.preventDefault();
       }
       
-      // Only start recording if we have started the interview and are not loading/already recording
-      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording) {
+      // Only start recording if we have started the interview and are not
+      // loading/already recording. Once the interview is wrapping up, the mic
+      // is closed — another turn would re-trigger story generation.
+      if (e.code === 'Space' && !e.repeat && messages.length > 0 && !isLoading && !isTranscribing && !isRecording && !isWrappingUp) {
         startRecording();
       }
     };
@@ -75,7 +82,7 @@ export default function Home() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isLoading, isTranscribing, isRecording, messages.length]);
+  }, [isLoading, isTranscribing, isRecording, isWrappingUp, messages.length]);
 
   const startRecording = async () => {
     try {
@@ -225,9 +232,10 @@ export default function Home() {
       const res = await fetch('/api/generate-story', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          messages: transcriptMessages, 
-          assignment: assignmentContext 
+        body: JSON.stringify({
+          messages: transcriptMessages,
+          assignment: assignmentContext,
+          interviewId: getInterviewId()
         })
       });
       
@@ -245,23 +253,27 @@ export default function Home() {
 
   const startInterview = async () => {
     setIsLoading(true);
+    interviewIdRef.current = null; // fresh MCP record per interview
     // Send an initial hidden prompt to kick off the conversation based on the brief
     const initialMessages: Message[] = [{ role: 'user', parts: [{ text: "Hello Jazo! Let's start the interview." }] }];
     await fetchTurn(initialMessages);
   };
 
-  const fetchTurn = async (currentMessages: Message[]) => {
+  // `wrapUp` is passed explicitly rather than read from state: the wrap-up
+  // button calls this in the same tick it flips `isWrappingUp`, and the state
+  // update wouldn't be visible in this closure yet.
+  const fetchTurn = async (currentMessages: Message[], wrapUp = isWrappingUp) => {
     setIsLoading(true);
     try {
       const fullAssignment = `Who is being interviewed: ${who}\nTopic: ${topic}\nContent Needed: ${contentType}`;
-      
+
       const chatRes = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          messages: currentMessages, 
+        body: JSON.stringify({
+          messages: currentMessages,
           assignment: fullAssignment,
-          wrapUp: isWrappingUp 
+          wrapUp
         })
       });
       
@@ -275,24 +287,41 @@ export default function Home() {
       setMood(jazoData.jazo_facial_expression);
 
       // Append model response to history
-      setMessages(prev => [...prev, { role: 'model', parts: [{ text: jazoData.elevenlabs_spoken_text }] }]);
+      const jazoTurn: Message = { role: 'model', parts: [{ text: jazoData.elevenlabs_spoken_text }] };
+      const finalMessages = [...currentMessages, jazoTurn];
+      setMessages(finalMessages);
 
       // 2. Play ElevenLabs TTS Natively Streamed
       if (jazoData.elevenlabs_spoken_text) {
         processAudioStream(jazoData.elevenlabs_spoken_text);
       }
 
-      // 3. Trigger Generation if Complete
-      if (jazoData.interview_progress === 'complete' || jazoData.interview_progress === 'completed') {
-        generateFinalStory(currentMessages, fullAssignment);
+      // 3. Trigger Generation if Complete. A wrap-up turn always ends the
+      // interview — we don't depend on the model remembering to report
+      // "complete" in interview_progress.
+      if (
+        wrapUp ||
+        jazoData.interview_progress === 'complete' ||
+        jazoData.interview_progress === 'completed'
+      ) {
+        generateFinalStory(finalMessages, fullAssignment);
       }
 
     } catch (error: any) {
       console.error(error);
       alert('Error: ' + error.message);
+      setIsWrappingUp(false); // let the user retry the wrap-up
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Asks Jazo for a closing turn right away. Once that turn comes back,
+  // fetchTurn kicks off story generation.
+  const wrapUpInterview = async () => {
+    if (isWrappingUp || isLoading || isTranscribing || messages.length === 0) return;
+    setIsWrappingUp(true);
+    await fetchTurn(messages, true);
   };
 
   return (
@@ -387,10 +416,11 @@ export default function Home() {
             )}
 
             {/* Wrap Up Button */}
-            {!isWrappingUp && !finalStory && !isGeneratingStory && (
-              <button 
-                onClick={() => setIsWrappingUp(true)}
-                style={{ position: 'absolute', top: '20px', right: '20px', background: '#ff3b30', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)' }}
+            {!isWrappingUp && !finalStory && !isGeneratingStory && messages.length > 0 && (
+              <button
+                onClick={wrapUpInterview}
+                disabled={isLoading || isTranscribing}
+                style={{ position: 'absolute', top: '20px', right: '20px', background: isLoading || isTranscribing ? '#ccc' : '#ff3b30', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', cursor: isLoading || isTranscribing ? 'not-allowed' : 'pointer', boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)' }}
               >
                 Wrap Up Interview
               </button>
@@ -405,7 +435,7 @@ export default function Home() {
             <div style={{ position: 'absolute', bottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
               <div style={{ 
                 width: '60px', height: '60px', borderRadius: '50%', 
-                background: isRecording ? '#ff3b30' : (isLoading || isTranscribing ? '#ccc' : '#f0f0f0'),
+                background: isRecording ? '#ff3b30' : (isLoading || isTranscribing || isWrappingUp ? '#ccc' : '#f0f0f0'),
                 display: 'flex', justifyContent: 'center', alignItems: 'center',
                 boxShadow: isRecording ? '0 0 20px rgba(255, 59, 48, 0.5)' : '0 2px 10px rgba(0,0,0,0.1)',
                 transition: 'all 0.2s ease'
@@ -413,7 +443,7 @@ export default function Home() {
                 <span style={{ fontSize: '24px' }}>🎙️</span>
               </div>
               <span style={{ color: '#666', fontWeight: 'bold', fontFamily: 'sans-serif' }}>
-                {isTranscribing ? 'Transcribing...' : (isLoading ? 'Jazo is thinking...' : (isRecording ? 'Listening...' : 'Hold SPACE to speak'))}
+                {isTranscribing ? 'Transcribing...' : (isLoading ? 'Jazo is thinking...' : (isRecording ? 'Listening...' : (isWrappingUp ? 'Interview complete' : 'Hold SPACE to speak')))}
               </span>
             </div>
 

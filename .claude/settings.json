@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find src *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Omare\\Jazo-Hack-Kentucky-2026"
+    ]
+  }
+}
